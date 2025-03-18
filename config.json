@@ -1,6 +1,6 @@
 {
-    "stock_list_path": "./stock_list.csv",
-    "original_data_folder": "../data/original",
-    "clean_data_folder": "../data/clean",
+    "stock_list_path": "./stock_data/stock_list.csv",
+    "original_data_folder": "./stock_data/original",
+    "clean_data_folder": "../stock_data/clean",
     "log_folder": "./logs"
-}        
+}
