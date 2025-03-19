@@ -2,6 +2,7 @@ import pandas as pd
 import argparse
 
 from data_01.download_stock import process_all_stocks
+from data_01.to_mongoDB import process_csv_files, remove_mongoDB
 from modules.config_loader import load_config
 from modules.logger import setup_logger
 
@@ -23,3 +24,7 @@ if __name__ == "__main__":
 
     if args.command == "download":
         download_all_stocks()
+    if args.command == "tomongo":
+        process_csv_files()
+    if args.command == "removemongo":
+        remove_mongoDB()
