@@ -1,109 +1,91 @@
-import backtrader as bt
-from modules.config_loader import load_config
+import math
+import sys
+import os
+from _02_strategy.single_strategy import StockBacktest
 from modules.logger import setup_logger
+from modules.process_mongo import get_mongo_client
 
 
-config = load_config()
-logger = setup_logger()
+class DualMovingAverageStrategy(StockBacktest):
 
+    def __init__(self, stock_id, start_date, end_date, initial_cash=100000, split_cash=0, logger_file="backtest.log", ma_low="sma_50", ma_high="ema_200"):
+        super().__init__(stock_id, start_date, end_date, initial_cash, split_cash, logger_file)  # 繼承父類初始化
+        self.ma_low = ma_low
+        self.ma_high = ma_high
 
-class MAStrategy(bt.Strategy):
-    params = (
-        ("lookback", 80),  # 設定回溯多少根K線來識別訂單區域
-        ("risk", 0.03),  # 風險百分比，用於設置停損
-        ("reward_ratio", 5),  # 獎勵風險比率，用於設置停利
-        ("pivot_range", 7),  # 檢測轉折點的區間大小
-        ("sma1", "sma50"),  # 檢測轉折點的區間大小
-        ("sma2", "sma200"),  # 檢測轉折點的區間大小
-    )
+    def buy_signal(self, i):
+        if i > 2:
+            return self.data.iloc[i - 2][self.ma_low] < self.data.iloc[i - 2][self.ma_high] and self.data.iloc[i - 1][self.ma_low] > self.data.iloc[i - 1][self.ma_high]
+        return False
 
-    def __init__(self) -> None:
-        self.sell_tax = 0.003  # Transaction tax 0.3% for selling
-        self.commission = 0.001425  # Commission 0.1425% for both buy and sell
-        self.wait_dat = 30
-        self.win = 0
-        self.lose = 0
-        self.buy_price = None  # 買入價格
-        self.buy_size = 0  # 買入量
-        self.is_show = False  # 是否打印
-        self.tax_total = 0  # 總手續費
-        self.count_day = 0  # 持有天數
-        self.stop_loss = None
-        self.take_profit = None  # 目標價格
-        self.entry_price = None
-        self.buy_date = None  # 買入日期
-        self.touch_list = []
-        self.hold_days = []  # 記錄持有天數
+    def sell_signal(self, i):
+        if i > 2:
+            return self.data.iloc[i - 2][self.ma_low] > self.data.iloc[i - 2][self.ma_high] and self.data.iloc[i - 1][self.ma_low] < self.data.iloc[i - 1][self.ma_high]
+        return False
 
-        pass
-
-    def next(self):
-        # 確保至少有足夠的歷史數據進行訂單區域的計算
-        if len(self) < self.wait_dat:
+    def process_buy(self, i):
+        self.buy_price = self.data.iloc[i]["open"]
+        self.position = self.split_cash // self.buy_price
+        if self.position <= 0:
             return
-        if len(self) >= self.data.buflen() - 5:
-            if self.buy_size > 0:
-                self.sell(price=self.data.close[0])  # Sell at current close price
-            return
+        tax = self.count_tax(self.buy_price, self.position)
+        self.cash -= self.position * self.buy_price + tax
+        self.log_transaction("BUY", i, self.buy_price, self.position, tax)
 
-        if self.buy_size > 0:
-            check_b = self.data.close[0] <= self.buy_price * 1.02
-            if self.data.low[0] <= self.stop_loss:
-                self.lose += 1
-                self.sell(self.stop_loss, check_b)
-            elif self.data.high[0] >= self.take_profit:
-                self.win += 1
-                self.sell(self.take_profit, check_b)
+    def process_sell(self, i):
+        sell_price = self.data.iloc[i]["open"]
+        tax = self.count_tax(sell_price, self.position, is_sell=True)
+        profit = (sell_price - self.buy_price) * self.position - tax
+        self.cash += sell_price * self.position - tax
+        self.win_count += 1 if profit > 0 else 0
+        self.lose_count += 1 if profit <= 0 else 0
+        self.log_transaction("SELL", i, sell_price, self.position, tax)
+        self.position = 0
+        self.buy_price = None
 
-        else:
-            if getattr(self.data, self.params.sma1)[-2] <= getattr(self.data, self.params.sma2)[-2] and getattr(self.data, self.params.sma1)[-1] > getattr(self.data, self.params.sma2)[-1]:
-                self.stop_loss = round((1 - self.params.risk) * self.data.close[0], 2)
-                self.take_profit = round(self.data.close[0] * (1 + self.params.risk * self.params.reward_ratio), 2)
-                # cash_level = int(self.broker.cash /500000) if self.broker.cash > 500000 else 1
-                cash_level = 1
-                buy_size = int(cash_level * 5000 / self.data.close[0])
-                if self.broker.cash >= self.data.close[0] * buy_size:
-                    # print(f'目標{self.take_profit} 停損 {self.stop_loss }')
-                    self.buy_size = buy_size
-                    # print(self.data.datetime.date(0))
-                    self.buy_date = self.data.datetime.date(0)
 
-                    self.buy(price=self.data.close[0])  # 進場
-                self.touch_list = []
-                self.touch_list = []
+def run_ma_backtest(start_date="2015-01-01", end_date="2023-12-31", initial_cash=100000):
 
-    def buy(self, price=None):
-        self.buy_price = round(price, 2)
-        self.count_fee(self.buy_price)
-        if self.is_show:
-            print(f"買 {self.data.datetime.date(0)}價格 {self.buy_price} 張數{self.buy_size} 本金:{self.broker.cash}")
-        super().buy(size=self.buy_size, price=self.buy_price)
+    sma_labs = ["sma_5", "sma_20", "sma_50", "sma_60", "sma_120", "sma_200"]
+    ema_labs = ["ema_5", "ema_20", "ema_50", "ema_60", "ema_120", "ema_200"]
+    db = get_mongo_client()
+    collections = [col for col in db.list_collection_names() if "TW" in col]
+    total_win = 0
+    total_lose = 0
+    total_profit = 0.0  # 計算總獲利
+    for i in range(len(sma_labs)):
+        for j in range(i + 1, len(sma_labs)):
+            log = setup_logger(f"./strategy_log/{sma_labs[i]}_{sma_labs[j]}_total_summary.log")
+            for stock_id in collections:
+                backtest = DualMovingAverageStrategy(stock_id=stock_id, start_date=start_date, end_date=end_date, initial_cash=initial_cash, logger_file=f"./strategy_log/{sma_labs[i]}_{sma_labs[j]}_total_summary.log")
+                backtest.run_backtest()
+                profit = backtest.cash - initial_cash
+                log.info(f"{stock_id}: 初始金額{initial_cash} ,最終金額 {backtest.cash} 獲利:{math.floor(profit)}, 勝率 {backtest.win_rate:.2%}")
+                total_win += backtest.win_count
+                total_lose += backtest.lose_count
+                total_profit += profit
+            buy_count = total_win + total_lose
+            win_rate = total_win / buy_count if buy_count > 0 else 0
+            avg_profit = total_profit / buy_count
 
-    def sell(self, price=None, sell_type=None):
-        sell_date = self.data.datetime.date(0)
-        # print(sell_date)
-        # print(self.buy_date_first)
-        hold_day = (sell_date - self.buy_date).days
-        self.hold_days.append(hold_day)
-        net_sell_price = round(price, 2)
-        self.count_fee(net_sell_price, True)
-        super().sell(size=self.buy_size, price=net_sell_price)
-        if self.is_show:
-            if sell_type is not None:
-                info = "停利" if sell_type else "停損"
-            else:
-                info = "賣"
-            info = f"{info} {self.data.datetime.date(0)}價格 {net_sell_price} 張數{self.buy_size} 總金額{self.buy_size * net_sell_price} 本金:{self.broker.cash}"
-            print(info)
-        self.move_stop_loss = None
-        self.buy_size = 0
-        self.buy_date = None
-        self.buy_date_first = None
+            log.info(f"總計:總營利{total_profit}, 股票數量{len(collections)},總下注量:{buy_count},每注獲利 {avg_profit:.2%}, 獲勝次數{total_win}, 總勝率 {win_rate:.2%}")
 
-    def count_fee(self, price, is_sell=False):
-        fee = price * self.buy_size * self.commission
-        if is_sell:
-            fee += price * self.buy_size * self.sell_tax
-        fee = round(fee) if fee > 20 else 20
-        self.tax_total += fee
-        self.broker.cash -= fee
+    total_win = 0
+    total_lose = 0
+    total_profit = 0.0  # 計算總獲利
+    for i in range(len(ema_labs)):
+        for j in range(i + 1, len(ema_labs)):
+            log = setup_logger(f"./strategy_log/{ema_labs[i]}_{ema_labs[j]}/total_summary.log")
+            for stock_id in collections:
+                backtest = DualMovingAverageStrategy(stock_id=stock_id, start_date=start_date, end_date=end_date, initial_cash=initial_cash, logger_file=f"./strategy_log/{sma_labs[i]}_{sma_labs[j]}/{stock_id}.log")
+                backtest.run_backtest()
+                profit = backtest.cash - initial_cash
+                log.info(f"{stock_id}: 初始金額{initial_cash} ,最終金額 {backtest.cash} 獲利:{profit}, 勝率 {backtest.win_rate:.2%}")
+                total_win += backtest.win_count
+                total_lose += backtest.lose_count
+                total_profit += profit
+
+            win_rate = total_win / (total_win + total_lose) if ((total_win + total_lose)) > 0 else 0
+            avg_profit = total_profit / len(collections)
+
+            log.info(f"總計:總營利{total_profit}, 股票數量{len(collections)}, 平均獲利 {avg_profit:.2%}, 總勝率 {win_rate:.2%}")

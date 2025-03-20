@@ -1,13 +1,11 @@
-import pandas as pd
 import argparse
 
-from data_01.download_stock import process_all_stocks
-from data_01.to_mongoDB import process_csv_files, remove_mongoDB
+from _01_data.download_stock import process_all_stocks
+from _01_data.to_mongoDB import process_csv_files, remove_mongoDB
+from _02_strategy.ma_strategy import run_ma_backtest
 from modules.config_loader import load_config
-from modules.logger import setup_logger
 
 config = load_config()
-logger = setup_logger()
 
 
 def download_all_stocks():
@@ -28,3 +26,5 @@ if __name__ == "__main__":
         process_csv_files()
     if args.command == "removemongo":
         remove_mongoDB()
+    if args.command == "text":
+        run_ma_backtest()

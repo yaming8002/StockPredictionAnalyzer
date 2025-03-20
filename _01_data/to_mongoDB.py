@@ -8,7 +8,7 @@ from modules.process_mongo import get_mongo_client
 from .stock_technical import calculate_bollinger_bands, calculate_ema, calculate_sma
 
 config = load_config()
-logger = setup_logger()
+logger = setup_logger("../toMongo.log")
 
 
 def process_csv_files():

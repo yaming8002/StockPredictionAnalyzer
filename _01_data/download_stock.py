@@ -7,7 +7,7 @@ from modules.config_loader import load_config
 from modules.logger import setup_logger
 
 config = load_config()
-logger = setup_logger()
+logger = setup_logger(log_file="../logs/download.log")
 
 
 def download_stock_data(symbol, start_date="2009-01-01", end_date=None, save_path="data"):
