@@ -17,7 +17,7 @@ class DualMovingAverageStrategy(StockBacktest):
 
     def buy_signal(self, i):
         if i > 2:
-            return self.data.iloc[i - 2][self.ma_low] < self.data.iloc[i - 2][self.ma_high] and self.data.iloc[i - 1][self.ma_low] > self.data.iloc[i - 1][self.ma_high]
+            return self.data.iloc[i - 2][self.ma_low] < self.data.iloc[i - 2][self.ma_high] and self.data.iloc[i - 1][self.ma_low] > self.data.iloc[i - 1][self.ma_high] and self.data.iloc[i - 1]["volume"] > 1000000
         return False
 
     def sell_signal(self, i):
@@ -45,9 +45,9 @@ def run_ma_backtest(start_date="2015-01-01", end_date="2019-12-31", initial_cash
             total_lose = 0
             total_profit = 0.0  # 計算總獲利
             hold_days = []
-            log = setup_logger(f"./strategy_log/{start_date}_to_{end_date}-{sma_labs[i]}_{sma_labs[j]}_total_summary.log")
+            log = setup_logger(f"./strategy_log/{start_date}_to_{end_date}-{sma_labs[i]}_{sma_labs[j]}_volumn_total_summary.log")
             for stock_id in collections:
-                backtest = DualMovingAverageStrategy(stock_id=stock_id, start_date=start_date, end_date=end_date, initial_cash=initial_cash, logger_file=f"./strategy_log/{start_date}_to_{end_date}-{sma_labs[i]}_{sma_labs[j]}_total_summary.log", ma_low=sma_labs[i], ma_high=sma_labs[j])
+                backtest = DualMovingAverageStrategy(stock_id=stock_id, start_date=start_date, end_date=end_date, initial_cash=initial_cash, logger_file=f"./strategy_log/{start_date}_to_{end_date}-{sma_labs[i]}_{sma_labs[j]}_volumn_total_summary.log", ma_low=sma_labs[i], ma_high=sma_labs[j])
                 backtest.run_backtest()
                 profit = backtest.cash - initial_cash
                 log.info(f"{stock_id}: 初始金額{initial_cash} ,最終金額 {backtest.cash} 獲利:{math.floor(profit)}, 勝率 {backtest.win_rate:.2%}")
@@ -81,9 +81,9 @@ def run_ma_backtest(start_date="2015-01-01", end_date="2019-12-31", initial_cash
             total_lose = 0
             total_profit = 0.0  # 計算總獲利
             hold_days = []
-            log = setup_logger(f"./strategy_log/{start_date}_to_{end_date}-{ema_labs[i]}_{ema_labs[j]}_total_summary.log")
+            log = setup_logger(f"./strategy_log/{start_date}_to_{end_date}-{ema_labs[i]}_{ema_labs[j]}_volumn_total_summary.log")
             for stock_id in collections:
-                backtest = DualMovingAverageStrategy(stock_id=stock_id, start_date=start_date, end_date=end_date, initial_cash=initial_cash, logger_file=f"./strategy_log/{start_date}_to_{end_date}-{ema_labs[i]}_{ema_labs[j]}_total_summary.log", ma_low=ema_labs[i], ma_high=ema_labs[j])
+                backtest = DualMovingAverageStrategy(stock_id=stock_id, start_date=start_date, end_date=end_date, initial_cash=initial_cash, logger_file=f"./strategy_log/{start_date}_to_{end_date}-{ema_labs[i]}_{ema_labs[j]}_volumn_total_summary.log", ma_low=ema_labs[i], ma_high=ema_labs[j])
                 backtest.run_backtest()
                 profit = backtest.cash - initial_cash
                 log.info(f"{stock_id}: 初始金額{initial_cash} ,最終金額 {backtest.cash} 獲利:{math.floor(profit)}, 勝率 {backtest.win_rate:.2%}")
