@@ -20,6 +20,9 @@ class StockBacktest:
         self.position = 0
         self.cash = initial_cash
         self.split_cash = split_cash if split_cash != 0 else math.floor(initial_cash * 0.05)
+        self.win_rate = 0.0
+        self.buy_index = None
+        self.hold_days: list[int] = []
         self.fetch_data()
 
     def fetch_data(self) -> None:
@@ -44,30 +47,34 @@ class StockBacktest:
     def sell_signal(self, i):
         return self.data.iloc[i]["close"] < self.data.iloc[i - 1]["close"]
 
+    def tw_ticket_gap(self, price):
+        """依照台股股價級距調整價格，無條件進位"""
+        if price < 10:
+            tick_size = 0.01
+        elif price < 50:
+            tick_size = 0.05
+        elif price < 100:
+            tick_size = 0.1
+        elif price < 500:
+            tick_size = 0.5
+        elif price < 1000:
+            tick_size = 1
+        else:
+            tick_size = 5
+
+        return float(f"{(math.ceil(price / tick_size) * tick_size):.2f}")  # 無條件進位
+
     def count_tax(self, price, position, is_sell=False):
         amount = price * position
         commission = max(amount * self.commission, 20)
         tax = amount * self.dues + commission if is_sell else commission
         return math.ceil(tax)
 
-    def process_buy(self, i):
-        price = self.data.iloc[i]["close"]
-        self.buy_price = price
-        self.position = math.floor(self.cash) // price
-        tax = self.count_tax(price, self.position)
-        self.cash -= math.ceil(self.position * price) + tax
-        self.log_transaction("BUY", i, self.buy_price, self.position, tax)
+    def buy_price_select(self, i):
+        return self.tw_ticket_gap(self.data.iloc[i]["close"])
 
-    def process_sell(self, i):
-        sell_price = self.data.iloc[i]["close"]
-        tax = self.count_tax(sell_price, self.position, is_sell=True)
-        profit = (sell_price - self.buy_price) * self.position - tax
-        self.cash += sell_price * self.position - tax
-        self.win_count += 1 if profit > 0 else 0
-        self.lose_count += 1 if profit <= 0 else 0
-        self.log_transaction("SELL", i, sell_price, self.position, tax)
-        self.position = 0
-        self.buy_price = None
+    def sell_price_select(self, i):
+        return self.tw_ticket_gap(self.data.iloc[i]["close"])
 
     def run_backtest(self):
         if self.data is None or len(self.data) < 2:
@@ -79,13 +86,43 @@ class StockBacktest:
                 break
             if self.position > 0:
                 if self.sell_signal(self.index):
-                    self.process_sell(self.index)
+                    sell_price = self.sell_price_select(self.index)
+                    tax = self.count_tax(sell_price, self.position, is_sell=True)
+                    profit = (sell_price - self.buy_price) * self.position - tax
+                    self.cash += math.ceil(sell_price * self.position) - tax
+                    self.win_count += 1 if profit > 0 else 0
+                    self.lose_count += 1 if profit <= 0 else 0
+                    self.log_transaction("SELL", self.index, sell_price, self.position, tax)
+                    days_difference = (self.data.index[self.index] - self.data.index[self.buy_index]).days
+                    self.hold_days.append(days_difference)
+                    self.position = 0
+                    self.buy_price = None
+                    self.buy_index = None
+
             else:
-                if self.buy_signal(self.index):
-                    self.process_buy(self.index)
+                if self.buy_signal(self.index) and self.index + 1 < size:
+                    self.buy_price = self.buy_price_select(self.index)
+                    self.position = self.split_cash // self.buy_price
+                    if self.position <= 0:
+                        return
+                    tax = self.count_tax(self.buy_price, self.position)
+                    self.cash -= math.ceil(self.position * self.buy_price) + tax
+                    self.buy_index = self.index
+                    self.log_transaction("BUY", self.index, self.buy_price, self.position, tax)
 
         if self.position > 0:
-            self.process_sell(size - 1)
+            sell_price = self.sell_price_select(self.index)
+            tax = self.count_tax(sell_price, self.position, is_sell=True)
+            profit = (sell_price - self.buy_price) * self.position - tax
+            self.cash += math.ceil(sell_price * self.position) - tax
+            self.win_count += 1 if profit > 0 else 0
+            self.lose_count += 1 if profit <= 0 else 0
+            self.log_transaction("SELL", self.index, sell_price, self.position, tax)
+            days_difference = (self.data.index[self.index] - self.data.index[self.buy_index]).days
+            self.hold_days.append(days_difference)
+            self.position = 0
+            self.buy_price = None
+            self.buy_index = None
         buy_count = self.win_count + self.lose_count
         self.win_rate = self.win_count / buy_count if buy_count > 0 else 0
         self.logger.info(f"{self.stock_id}: 總金額 {self.cash}, 下注次數 {buy_count} , 獲利次數{self.win_count} 勝率 {self.win_rate:.2%}")
