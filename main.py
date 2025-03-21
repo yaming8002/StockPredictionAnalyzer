@@ -2,6 +2,8 @@ import argparse
 
 from _01_data.download_stock import process_all_stocks
 from _01_data.to_mongoDB import process_csv_files, remove_mongoDB
+
+from _02_strategy.analyze_log import analyze_log_folder
 from _02_strategy.ma_strategy import run_ma_backtest
 from modules.config_loader import load_config
 
@@ -28,3 +30,5 @@ if __name__ == "__main__":
         remove_mongoDB()
     if args.command == "text":
         run_ma_backtest()
+    if args.command == "readlog":
+        analyze_log_folder()

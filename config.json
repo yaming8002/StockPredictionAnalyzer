@@ -2,7 +2,7 @@
     "stock_list_path": "./stock_data/stock_list.csv",
     "original_data_folder": "./stock_data/original",
     "clean_data_folder": "../stock_data/clean",
-    "log_folder": "./logs",
+    "strategy_log_folder": "./strategy_log",
     "mongo_uri": "mongodb://192.168.1.110:32768",
     "use_mongodb": true
 }

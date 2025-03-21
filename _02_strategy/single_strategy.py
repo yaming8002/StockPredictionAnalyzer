@@ -1,17 +1,19 @@
 from datetime import datetime
 import math
 import pandas as pd
+from modules.config_loader import load_config
 from modules.logger import setup_logger
 from modules.process_mongo import get_mongo_client
-
+config = load_config()
 
 class StockBacktest:
-    def __init__(self, stock_id: str, start_date: str, end_date: str, initial_cash=100000, split_cash=0, logger_file=".\\backtest.log"):
+    def __init__(self, stock_id: str, start_date: str, end_date: str, initial_cash=100000, split_cash=0, label="backtest"):
         self.stock_id = stock_id
+        self.label = label
         self.start_date = datetime.strptime(start_date, "%Y-%m-%d")
         self.end_date = datetime.strptime(end_date, "%Y-%m-%d")
         self.initial_cash = initial_cash
-        self.logger = setup_logger(log_file=logger_file)  # 避免 logger 進入 __setattr__ 監聽
+        self.db = get_mongo_client()
         self.win_count = 0
         self.lose_count = 0
         self.final_cash = initial_cash
@@ -25,9 +27,11 @@ class StockBacktest:
         self.hold_days: list[int] = []
         self.fetch_data()
 
+        log_file_path = f"{config.get("strategy_log_folder", "./strategy_log")}/{start_date}_to_{end_date}-{label}.log"
+        self.logger = setup_logger(log_file=log_file_path)  # 避免 logger 進入 __setattr__ 監聽
+
     def fetch_data(self) -> None:
-        db = get_mongo_client()
-        collection = db[self.stock_id]
+        collection = self.db[self.stock_id]
         data = collection.find({"date": {"$gte": self.start_date, "$lte": self.end_date}})
         self.data = pd.DataFrame(data)
         if self.data.empty:
@@ -40,6 +44,7 @@ class StockBacktest:
         """統一記錄交易資訊"""
         log_msg = f"id:{self.stock_id}, 日期:{self.data.index[i]}, type:{transaction_type},價格: {price},股數:{position},現金餘額:{self.cash}, 手續費(含稅): {tax}"
         self.logger.info(log_msg)
+        if 
 
     def buy_signal(self, i):
         return self.data.iloc[i]["close"] > self.data.iloc[i - 1]["close"]
@@ -111,18 +116,10 @@ class StockBacktest:
                     self.log_transaction("BUY", self.index, self.buy_price, self.position, tax)
 
         if self.position > 0:
-            sell_price = self.sell_price_select(self.index)
-            tax = self.count_tax(sell_price, self.position, is_sell=True)
-            profit = (sell_price - self.buy_price) * self.position - tax
-            self.cash += math.ceil(sell_price * self.position) - tax
-            self.win_count += 1 if profit > 0 else 0
-            self.lose_count += 1 if profit <= 0 else 0
-            self.log_transaction("SELL", self.index, sell_price, self.position, tax)
-            days_difference = (self.data.index[self.index] - self.data.index[self.buy_index]).days
-            self.hold_days.append(days_difference)
-            self.position = 0
-            self.buy_price = None
-            self.buy_index = None
+            tax = self.count_tax(self.buy_price, self.position)
+            self.cash += math.ceil(self.position * self.buy_price) + tax
+            self.log_transaction("Null", self.index, self.buy_price, self.position, tax)
+
         buy_count = self.win_count + self.lose_count
         self.win_rate = self.win_count / buy_count if buy_count > 0 else 0
         self.logger.info(f"{self.stock_id}: 總金額 {self.cash}, 下注次數 {buy_count} , 獲利次數{self.win_count} 勝率 {self.win_rate:.2%}")

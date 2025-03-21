@@ -4,14 +4,17 @@ import os
 import numpy as np
 import statistics
 from _02_strategy.single_strategy import StockBacktest
+from modules.config_loader import load_config
 from modules.logger import setup_logger
 from modules.process_mongo import get_mongo_client
+
+config = load_config()
 
 
 class DualMovingAverageStrategy(StockBacktest):
 
-    def __init__(self, stock_id, start_date, end_date, initial_cash=100000, split_cash=0, logger_file="backtest.log", ma_low="sma_50", ma_high="ema_200"):
-        super().__init__(stock_id, start_date, end_date, initial_cash, split_cash, logger_file)  # 繼承父類初始化
+    def __init__(self, stock_id, start_date, end_date, initial_cash=100000, split_cash=0, label="backtest", ma_low="sma_50", ma_high="ema_200"):
+        super().__init__(stock_id, start_date, end_date, initial_cash, split_cash, label)  # 繼承父類初始化
         self.ma_low = ma_low
         self.ma_high = ma_high
 
@@ -38,16 +41,18 @@ def run_ma_backtest(start_date="2015-01-01", end_date="2019-12-31", initial_cash
     ema_labs = ["ema_5", "ema_20", "ema_50", "ema_60", "ema_120", "ema_200"]
     db = get_mongo_client()
     collections = [col for col in db.list_collection_names() if "TW" in col]
-
+    strategy_log_folder = config.get("strategy_log_folder", "./strategy_log")
     for i in range(len(sma_labs)):
         for j in range(i + 1, len(sma_labs)):
             total_win = 0
             total_lose = 0
             total_profit = 0.0  # 計算總獲利
             hold_days = []
-            log = setup_logger(f"./strategy_log/{start_date}_to_{end_date}-{sma_labs[i]}_{sma_labs[j]}_total_summary.log")
+            label = f"{ema_labs[i]}_{ema_labs[j]}"
+            log_file_path = f"{strategy_log_folder}/{start_date}_to_{end_date}-{label}.log"
+            log = setup_logger(log_file_path)
             for stock_id in collections:
-                backtest = DualMovingAverageStrategy(stock_id=stock_id, start_date=start_date, end_date=end_date, initial_cash=initial_cash, logger_file=f"./strategy_log/{start_date}_to_{end_date}-{sma_labs[i]}_{sma_labs[j]}_total_summary.log", ma_low=sma_labs[i], ma_high=sma_labs[j])
+                backtest = DualMovingAverageStrategy(stock_id=stock_id, start_date=start_date, end_date=end_date, initial_cash=initial_cash, label=label, ma_low=ema_labs[i], ma_high=ema_labs[j])
                 backtest.run_backtest()
                 profit = backtest.cash - initial_cash
                 log.info(f"{stock_id}: 初始金額{initial_cash} ,最終金額 {backtest.cash} 獲利:{math.floor(profit)}, 勝率 {backtest.win_rate:.2%}")
@@ -81,9 +86,11 @@ def run_ma_backtest(start_date="2015-01-01", end_date="2019-12-31", initial_cash
             total_lose = 0
             total_profit = 0.0  # 計算總獲利
             hold_days = []
-            log = setup_logger(f"./strategy_log/{start_date}_to_{end_date}-{ema_labs[i]}_{ema_labs[j]}_total_summary.log")
+            label = f"{ema_labs[i]}_{ema_labs[j]}"
+            log_file_path = f"{strategy_log_folder}/{start_date}_to_{end_date}-{label}.log"
+            log = setup_logger(log_file_path)
             for stock_id in collections:
-                backtest = DualMovingAverageStrategy(stock_id=stock_id, start_date=start_date, end_date=end_date, initial_cash=initial_cash, logger_file=f"./strategy_log/{start_date}_to_{end_date}-{ema_labs[i]}_{ema_labs[j]}_total_summary.log", ma_low=ema_labs[i], ma_high=ema_labs[j])
+                backtest = DualMovingAverageStrategy(stock_id=stock_id, start_date=start_date, end_date=end_date, initial_cash=initial_cash, label=label, ma_low=ema_labs[i], ma_high=ema_labs[j])
                 backtest.run_backtest()
                 profit = backtest.cash - initial_cash
                 log.info(f"{stock_id}: 初始金額{initial_cash} ,最終金額 {backtest.cash} 獲利:{math.floor(profit)}, 勝率 {backtest.win_rate:.2%}")
