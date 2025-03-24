@@ -1,3 +1,5 @@
 *original
 *clean
 *.pyc
+*.pyc
+/stock_data/*
