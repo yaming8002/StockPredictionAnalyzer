@@ -3,6 +3,7 @@
     "original_data_folder": "./stock_data/original",
     "clean_data_folder": "../stock_data/clean",
     "strategy_log_folder": "./strategy_log",
-    "mongo_uri": "mongodb://192.168.1.110:32768",
+    "leaning_folder": "./stock_data/leaning_label",
+    "mongo_uri": "mongodb://192.168.1.110:32769",
     "use_mongodb": true
 }

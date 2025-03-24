@@ -3,7 +3,7 @@ import os
 from logging.handlers import TimedRotatingFileHandler
 
 
-def setup_logger(log_file=None):
+def setup_logger(log_file=None, loglevel=logging.DEBUG):
     """建立 log 記錄，顯示在 CMD 並寫入檔案，且每日分割 log 檔案"""
     if log_file is None:
         log_file = os.path.join(os.path.dirname(__file__), "logs", "stock_analysis.log")
@@ -12,7 +12,7 @@ def setup_logger(log_file=None):
 
     logger = logging.getLogger(log_file)  # 🔹 確保不同的 `log_file` 創建不同 logger
     if not logger.hasHandlers():
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(loglevel)
 
         # **建立「每日」分割的 log**
         file_handler = TimedRotatingFileHandler(log_file, when="midnight", interval=1, backupCount=30, encoding="utf-8")
