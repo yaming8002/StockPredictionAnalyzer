@@ -6,9 +6,19 @@ from modules.logger import setup_logger
 config = load_config()
 logger = setup_logger()
 
+_client = None
+
 
 def get_mongo_client():
-    """從 config.json 取得 MongoDB 設定"""
-    mongo_uri = config.get("mongo_uri", "mongodb://localhost:27017")
-    client = pymongo.MongoClient(mongo_uri)
-    return client[config.get("mongo_db", "stock_db")]
+    global _client
+    if _client is None:
+        mongo_uri = config.get("mongo_uri", "mongodb://localhost:27017")
+        _client = pymongo.MongoClient(mongo_uri, serverSelectionTimeoutMS=100000)
+    return _client[config.get("mongo_db", "stock_db")]
+
+
+def close_mongo_client():
+    global _client
+    if _client is not None:
+        _client.close()
+        _client = None

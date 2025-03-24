@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import pymongo
+from typing import List, Optional
 
 from modules.config_loader import load_config
 from modules.logger import setup_logger
