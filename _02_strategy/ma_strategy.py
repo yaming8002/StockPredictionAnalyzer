@@ -23,7 +23,7 @@ class DualMovingAverageStrategy(StockBacktest):
 
     def buy_signal(self, i):
         if i > 2:
-            return self.data.iloc[i - 2][self.ma_low] < self.data.iloc[i - 2][self.ma_high] and self.data.iloc[i - 1][self.ma_low] > self.data.iloc[i - 1][self.ma_high]
+            return self.data.iloc[i - 2][self.ma_low] < self.data.iloc[i - 2][self.ma_high] and self.data.iloc[i - 1][self.ma_low] > self.data.iloc[i - 1][self.ma_high] and self.data.iloc[i - 1]["volume"] > 500000
         return False
 
     def sell_signal(self, i):
@@ -50,7 +50,7 @@ def run_ma_list(ma_labs: list, start_date="2015-01-01", end_date="2019-12-31", i
             total_profit = 0.0
             hold_days = []
             trade_records = []
-            label = f"{ma_labs[i]}_{ma_labs[j]}"
+            label = f"{ma_labs[i]}_{ma_labs[j]}_volume"
             log_file_path = f"{strategy_log_folder}/{start_date}_to_{end_date}-{label}.log"
             log = setup_logger(log_file=log_file_path, loglevel=logging.INFO)
 
@@ -100,5 +100,5 @@ def run_ma_backtest(start_date="2012-01-01", end_date="2019-12-31", initial_cash
     sma_labs = ["sma_5", "sma_20", "sma_50", "sma_60", "sma_120", "sma_200"]
     ema_labs = ["ema_5", "ema_20", "ema_50", "ema_60", "ema_120", "ema_200"]
 
-    run_ma_list(sma_labs, start_date=start_date, end_date=end_date, initial_cash=initial_cash)
+    # run_ma_list(sma_labs, start_date=start_date, end_date=end_date, initial_cash=initial_cash)
     run_ma_list(ema_labs, start_date=start_date, end_date=end_date, initial_cash=initial_cash)
