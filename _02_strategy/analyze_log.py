@@ -65,3 +65,71 @@ def extract_log_summary(strategy_log_folder: str = "./strategy_log") -> str:
     summary_df.to_excel(output_path, index=False)
 
     return output_path
+
+
+def stock_targer_win(label_folder: str = "./stock_data/leaning_label") -> str:
+    """
+    統計各股票在不同策略下的勝率（只輸出 _win_rate 欄位）
+
+    Args:
+        label_folder (str): 標籤檔所在資料夾
+
+    Returns:
+        str: 匯出的 Excel 路徑
+    """
+
+    if not os.path.exists(label_folder):
+        raise FileNotFoundError(f"❌ 找不到資料夾: {label_folder}")
+
+    stocks = {}
+
+    for file in os.listdir(label_folder):
+        file_path = os.path.join(label_folder, file)
+        filename = os.path.splitext(file)[0]
+
+        # 跳過自己
+        if "stock_targer_win" in filename:
+            continue
+
+        df = pd.read_csv(file_path)
+        for _, row in df.iterrows():
+            stock = row["stock_id"]
+            if stock not in stocks:
+                stocks[stock] = {}
+
+            total_key = f"{filename}_total"
+            win_key = f"{filename}_win"
+
+            if total_key not in stocks[stock]:
+                stocks[stock][total_key] = 0
+                stocks[stock][win_key] = 0
+
+            stocks[stock][total_key] += 1
+            if row["profit"] > 0:
+                stocks[stock][win_key] += 1
+
+    # 建成 DataFrame
+    df = pd.DataFrame.from_dict(stocks, orient="index")
+    df.index.name = "stock_id"
+    df.reset_index(inplace=True)
+
+    # ✅ 只保留勝率欄位
+    win_rate_cols = []
+    clean_df = pd.DataFrame()
+    clean_df["stock_id"] = df["stock_id"]
+
+    for col in df.columns:
+        if col.endswith("_total"):
+            prefix = col.replace("_total", "")
+            win_col = f"{prefix}_win"
+            winrate_col = f"{prefix}_win_rate"
+            if win_col in df.columns:
+                clean_df[winrate_col] = (df[win_col] / df[col]).round(3)
+                win_rate_cols.append(winrate_col)
+
+    # ✅ 匯出結果
+    output_path = os.path.join(label_folder, "stock_targer_win.xlsx")
+    clean_df.to_excel(output_path, index=False)
+    print(f"✅ 勝率統計完成，檔案儲存於：{output_path}")
+
+    return output_path
