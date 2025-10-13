@@ -86,3 +86,114 @@
 - `run_backtest()`：執行回測，統計交易結果。
 
 ---
+## 03_deeplearning
+深度學習訓練
+
+### 1. DpTrainerBisis
+**功能：**
+
+- 提供一個通用的深度學習訓練框架，適合 LSTM 類型的模型進行訓練、驗證、儲存以及繪圖顯示。
+- 支援 One-Hot 編碼的多類別分類，以及標量類型的二元分類。
+
+**主要屬性：**
+
+- file_path：訓練資料檔案的路徑。
+- save_path：訓練後儲存模型的路徑。
+- input_shape：輸入資料的形狀 (time_steps, features)。
+- output_shape：輸出的類別數目（One-Hot 時為 2）。
+- optimizer：優化器（預設為 Adam）。
+- is_onehot：是否使用 One-Hot 編碼。
+- batch_size：訓練的批次大小。
+- epochs：最大訓練回合數。
+- model：Keras 模型實例。
+- history：儲存每個 Epoch 的訓練與驗證記錄。
+
+**主要函數：**
+- __init__(self, file_path, save_path, input_shape, output_shape, optimizer=None, is_onehot=False, batch_size=64, epochs=100)
+初始化模型的基本參數。
+根據 is_onehot 設定 loss function：
+如果是 True，則使用 categorical_crossentropy。
+如果是 False，則使用 sparse_categorical_crossentropy。
+初始化歷史記錄 self.history。
+呼叫 build_model() 建立模型並進行編譯。
+
+- build_model(self)
+抽象方法，必須在子類別中實作。
+
+負責構建實際的 LSTM 模型結構。
+
+- tranging_model(self)
+    負責完整的模型訓練過程，包括：
+    載入資料並切割為訓練集與驗證集（95% / 5%）。
+    設定 class_weight 平衡正負樣本。
+    呼叫 fit() 執行模型訓練。
+    呼叫 evaluate() 進行評估。
+    呼叫 save_model() 儲存最佳模型。
+    呼叫 plot_history() 顯示學習曲線。
+
+- fit(self, train_df, val_df, class_weight, patience=5)，負責模型的迭代訓練。
+    每次 Epoch 重新打亂資料。
+    使用 class_weight 來平衡正負類別。
+    執行 Early Stopping，若 patience 次數內沒有改善則終止。
+    儲存最佳模型權重。
+    早期停止條件：
+    如果 val_loss 無法在 patience 次數內降低，則恢復到最佳模型。
+
+- create_data_generator(self, dataframe)：建立資料生成器，支援：
+    - One-Hot 編碼模式
+    - 標量類型模式
+    - 使用 tf.data.Dataset.from_generator 創建資料流。
+        資料會經過：
+        - 分批讀取 (batch)
+        - 提前載入 (prefetch)
+
+- evaluate(self, val_df)
+    負責評估模型的效能。
+    輸出測試集的準確率與損失。
+
+- save_model(self)
+    將模型儲存至指定路徑。
+    使用 .h5 格式進行儲存，包含優化器參數。
+
+- plot_history(self)
+    繪製模型在訓練過程中的學習曲線。
+    包含：
+    - 訓練準確率 (Train Accuracy)
+    - 驗證準確率 (Validation Accuracy)
+    - 訓練損失 (Train Loss)
+    - 驗證損失 (Validation Loss)
+
+**使用範例 **
+```
+from tensorflow.keras.optimizers import Adam
+from custom_lstm_model import CustomLSTMModel
+# 建構自訂義的model
+class CustomLSTMModel(DpTrainerBisis):
+    def build_model(self):
+        inputs = Input(shape=self.input_shape, name="Input_Layer")
+        x = LSTM(64, return_sequences=True, name="LSTM_1")(inputs)
+        x = Dropout(0.5, name="Dropout_1")(x)
+        x = Flatten()(x)
+        x = Dense(128, activation="relu", name="Dense_Layer1")(x)
+        x = BatchNormalization(name="BatchNorm")(x)
+        outputs = Dense(self.output_shape, activation="softmax", name="Output_Layer")(x)
+        return Model(inputs=inputs, outputs=outputs, name="LSTM_Model")
+
+file_path = "./stock_data/leaning_label/turtle_trades.csv"
+model_path = "run_turtle_deep_01.h5"
+optimizer = Adam(learning_rate=0.0001)
+# 載入設定
+trainer = CustomLSTMModel(
+    file_path=file_path,
+    save_path=model_path,
+    is_onehot=True,
+    input_shape=(30, 19),
+    output_shape=2,
+    optimizer=optimizer
+)
+# 訓練
+trainer.tranging_model()
+
+
+```
+//

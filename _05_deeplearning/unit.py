@@ -91,6 +91,23 @@ def build_training_data_gen_from_df(trades_df):
             yield X, y
 
 
+def build_training_data_gen_one_hot_from_df(trades_df):
+    """
+    接收已切割的 trades DataFrame，逐筆取得資料與 label
+    """
+    for _, row in trades_df.iterrows():
+        stock_id = row["stock_id"]
+        buy_date = row["buy_date"]
+        profit = row["profit"]
+
+        features = get_stock_features(stock_id, buy_date)
+
+        if len(features) == 30:
+            X = features.values.astype(np.float32)
+            y = [1, 0] if profit > 100 else [0, 1]
+            yield X, y
+
+
 def test_03_data_view():
     file_path = "./stock_data/leaning_label/sma_20_sma_50_trades.csv"
     # df = pd.read_csv(file_path, parse_dates=["buy_date", "sell_date"])

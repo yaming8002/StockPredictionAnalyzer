@@ -1,0 +1,5 @@
+{
+    "python.autoComplete.extraPaths": [],
+    "containers.commands.attach": "${containerCommand} exec -it ${containerId} ${shellCommand}",
+    "remote.WSL.debug": true
+}

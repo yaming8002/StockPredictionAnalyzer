@@ -1,4 +1,12 @@
 *original
 *clean
 *.pyc
+*.log
+*.csv
+/uvenv/*
 /stock_data/*
+/processed_data/*
+/strategy_log/*
+/sample_output/*
+/_09_market/*
+

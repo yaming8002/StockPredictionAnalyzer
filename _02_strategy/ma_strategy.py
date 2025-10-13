@@ -33,12 +33,19 @@ class DualMovingAverageStrategy(StockBacktest):
 
     def buy_signal(self, i):
         if i > 2:
-            return self.data.iloc[i - 2][self.ma_low] < self.data.iloc[i - 2][self.ma_high] and self.data.iloc[i - 1][self.ma_low] > self.data.iloc[i - 1][self.ma_high] and self.data.iloc[i - 1]["volume"] > 500000
+            return (
+                self.data.iloc[i - 2][self.ma_low] < self.data.iloc[i - 2][self.ma_high]
+                and self.data.iloc[i - 1][self.ma_low] > self.data.iloc[i - 1][self.ma_high]
+                and self.data.iloc[i - 1]["volume"] > 500000
+            )
         return False
 
     def sell_signal(self, i):
         if i > 2:
-            return self.data.iloc[i - 2][self.ma_low] > self.data.iloc[i - 2][self.ma_high] and self.data.iloc[i - 1][self.ma_low] < self.data.iloc[i - 1][self.ma_high]
+            return (
+                self.data.iloc[i - 2][self.ma_low] > self.data.iloc[i - 2][self.ma_high]
+                and self.data.iloc[i - 1][self.ma_low] < self.data.iloc[i - 1][self.ma_high]
+            )
         return False
 
     def buy_price_select(self, i):
@@ -76,7 +83,9 @@ def run_ma_list(ma_labs: list, start_date="2015-01-01", end_date="2019-12-31", i
                 )
                 backtest.run_backtest()
                 profit = backtest.cash - initial_cash
-                log.info(f"{stock_id}: 初始金額{initial_cash} ,最終金額 {backtest.cash} 獲利:{math.floor(profit)}, 勝率 {backtest.win_rate:.2%}")
+                log.info(
+                    f"{stock_id}: 初始金額{initial_cash} ,最終金額 {backtest.cash} 獲利:{math.floor(profit)}, 勝率 {backtest.win_rate:.2%}"
+                )
                 total_win += backtest.win_count
                 total_lose += backtest.lose_count
                 total_profit += profit
@@ -87,7 +96,9 @@ def run_ma_list(ma_labs: list, start_date="2015-01-01", end_date="2019-12-31", i
             win_rate = total_win / buy_count if buy_count > 0 else 0
             avg_profit = total_profit / buy_count if buy_count > 0 else 0
 
-            log.info(f"總計:總營利{total_profit}, 股票數量{len(collections)},總下注量:{buy_count},每注獲利 {avg_profit:.2f}, 獲勝次數{total_win}, 總勝率 {win_rate:.2%}")
+            log.info(
+                f"總計:總營利{total_profit}, 股票數量{len(collections)},總下注量:{buy_count},每注獲利 {avg_profit:.2f}, 獲勝次數{total_win}, 總勝率 {win_rate:.2%}"
+            )
             if len(trade_records) > 0:
                 df = pd.DataFrame(trade_records)
                 output_folder = config.get("leaning_folder", "./stock_data/leaning_label")
@@ -108,7 +119,9 @@ def run_ma_list(ma_labs: list, start_date="2015-01-01", end_date="2019-12-31", i
                 except statistics.StatisticsError:
                     mode_days = "無唯一眾數"
 
-                log.info(f"持有天數統計: 最大 {max_days}, 最小 {min_days}, 平均 {avg_days:.2f}, 標準差 {std_days:.2f}, 眾數 {mode_days}")
+                log.info(
+                    f"持有天數統計: 最大 {max_days}, 最小 {min_days}, 平均 {avg_days:.2f}, 標準差 {std_days:.2f}, 眾數 {mode_days}"
+                )
             else:
                 log.info("無持有天數數據")
     close_mongo_client()
@@ -145,6 +158,7 @@ def run_ma_by_stock(
     log = setup_logger(log_file=log_file_path, loglevel=logging.INFO)
 
     for stock_id in stock_list:
+        print(stock_id)
         backtest = DualMovingAverageStrategy(
             stock_id=stock_id,
             start_date=start_date,
@@ -156,7 +170,9 @@ def run_ma_by_stock(
         )
         backtest.run_backtest()
         profit = backtest.cash - initial_cash
-        log.info(f"{stock_id}: 初始金額{initial_cash} ,最終金額 {backtest.cash} 獲利:{math.floor(profit)}, 勝率 {backtest.win_rate:.2%}")
+        log.info(
+            f"{stock_id}: 初始金額{initial_cash} ,最終金額 {backtest.cash} 獲利:{math.floor(profit)}, 勝率 {backtest.win_rate:.2%}"
+        )
         total_win += backtest.win_count
         total_lose += backtest.lose_count
         total_profit += profit
@@ -167,7 +183,9 @@ def run_ma_by_stock(
     win_rate = total_win / buy_count if buy_count > 0 else 0
     avg_profit = total_profit / buy_count if buy_count > 0 else 0
 
-    log.info(f"總計:總營利{total_profit}, 股票數量{len(stock_list)},總下注量:{buy_count},每注獲利 {avg_profit:.2f}, 獲勝次數{total_win}, 總勝率 {win_rate:.2%}")
+    log.info(
+        f"總計:總營利{total_profit}, 股票數量{len(stock_list)},總下注量:{buy_count},每注獲利 {avg_profit:.2f}, 獲勝次數{total_win}, 總勝率 {win_rate:.2%}"
+    )
     if len(trade_records) > 0:
         df = pd.DataFrame(trade_records)
         output_folder = config.get("leaning_folder", "./stock_data/leaning_label")
@@ -188,7 +206,9 @@ def run_ma_by_stock(
         except statistics.StatisticsError:
             mode_days = "無唯一眾數"
 
-        log.info(f"持有天數統計: 最大 {max_days}, 最小 {min_days}, 平均 {avg_days:.2f}, 標準差 {std_days:.2f}, 眾數 {mode_days}")
+        log.info(
+            f"持有天數統計: 最大 {max_days}, 最小 {min_days}, 平均 {avg_days:.2f}, 標準差 {std_days:.2f}, 眾數 {mode_days}"
+        )
     else:
         log.info("無持有天數數據")
     close_mongo_client()

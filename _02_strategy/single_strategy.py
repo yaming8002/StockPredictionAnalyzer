@@ -10,16 +10,24 @@ config = load_config()
 
 
 class StockBacktest:
-    def __init__(self, stock_id: str, start_date: str, end_date: str, initial_cash=100000, split_cash=0, label="backtest", loglevel=logging.INFO):
+    def __init__(
+        self,
+        stock_id: str,
+        start_date: str,
+        end_date: str,
+        initial_cash=100000,
+        split_cash=0,
+        label="backtest",
+        loglevel=logging.INFO,
+    ):
         self.stock_id = stock_id
         self.label = label
-        self.start_date = datetime.strptime(start_date, "%Y-%m-%d")
-        self.end_date = datetime.strptime(end_date, "%Y-%m-%d")
+        self.start_date = start_date
+        self.end_date = end_date
         self.initial_cash = initial_cash
         self.db = get_mongo_client()
         self.win_count = 0
         self.lose_count = 0
-        self.final_cash = initial_cash
         self.commission = 0.001425
         self.dues = 0.003
         self.position = 0
@@ -28,10 +36,10 @@ class StockBacktest:
         self.win_rate = 0.0
         self.buy_index = None
         self.hold_days: list[int] = []
-        self.fetch_data()
         self.trade_records = []
         log_file_path = f"{config.get('strategy_log_folder', './strategy_log')}/{start_date}_to_{end_date}-{label}.log"
         self.logger = setup_logger(log_file=log_file_path, loglevel=loglevel)  # 避免 logger 進入 __setattr__ 監聽
+        self.fetch_data()
 
     def fetch_data(self) -> None:
         collection = self.db[self.stock_id]
@@ -43,8 +51,20 @@ class StockBacktest:
         self.data["date"] = pd.to_datetime(self.data["date"])
         self.data.set_index("date", inplace=True)
 
-    def insert_trade_record(self, buy_date, buy_price, buy_tax, quantity, sell_date, sell_price, sell_tax, days, profit) -> None:
-        record = {"stock_id": self.stock_id, "buy_date": buy_date.strftime("%Y-%m-%d"), "buy_price": buy_price, "buy_tax": buy_tax, "quantity": quantity, "sell_date": sell_date.strftime("%Y-%m-%d"), "sell_price": sell_price, "hold_days": days, "profit": profit}
+    def insert_trade_record(
+        self, buy_date, buy_price, buy_tax, quantity, sell_date, sell_price, sell_tax, days, profit
+    ) -> None:
+        record = {
+            "stock_id": self.stock_id,
+            "buy_date": buy_date.strftime("%Y-%m-%d"),
+            "buy_price": buy_price,
+            "buy_tax": buy_tax,
+            "quantity": quantity,
+            "sell_date": sell_date.strftime("%Y-%m-%d"),
+            "sell_price": sell_price,
+            "hold_days": days,
+            "profit": profit,
+        }
         self.trade_records.append(record)
 
     def log_transaction(self, transaction_type, i, price, position, tax):
@@ -58,17 +78,17 @@ class StockBacktest:
     def sell_signal(self, i):
         return self.data.iloc[i]["close"] < self.data.iloc[i - 1]["close"]
 
-    def tw_ticket_gap(self, price):
+    def tw_ticket_gap(self, price: float):
         """依照台股股價級距調整價格，無條件進位"""
-        if price < 10:
+        if price < 10.0:
             tick_size = 0.01
-        elif price < 50:
+        elif price < 50.0:
             tick_size = 0.05
-        elif price < 100:
+        elif price < 100.0:
             tick_size = 0.1
-        elif price < 500:
+        elif price < 500.0:
             tick_size = 0.5
-        elif price < 1000:
+        elif price < 1000.0:
             tick_size = 1
         else:
             tick_size = 5
@@ -87,6 +107,9 @@ class StockBacktest:
     def sell_price_select(self, i):
         return self.tw_ticket_gap(self.data.iloc[i]["close"])
 
+    def ervey_date_work(self):
+        pass
+
     def run_backtest(self):
         if self.data is None or len(self.data) < 2:
             return
@@ -95,7 +118,9 @@ class StockBacktest:
         for self.index in range(1, size):
             if self.cash < self.split_cash * 5:  # 賠錢到一定的金額就跳出
                 break
+
             if self.position > 0:
+                self.ervey_date_work()
                 if self.sell_signal(self.index):
                     sell_price = self.sell_price_select(self.index)
                     sell_tax = self.count_tax(sell_price, self.position, is_sell=True)
@@ -107,7 +132,17 @@ class StockBacktest:
                     days_difference = (self.data.index[self.index] - self.data.index[self.buy_index]).days
                     self.hold_days.append(days_difference)
                     # 新增儲存交易記錄
-                    self.insert_trade_record(buy_date=self.data.index[self.buy_index], buy_price=self.buy_price, buy_tax=self.buy_tax, quantity=self.position, sell_date=self.data.index[self.index], sell_price=sell_price, sell_tax=sell_tax, days=days_difference, profit=profit)
+                    self.insert_trade_record(
+                        buy_date=self.data.index[self.buy_index],
+                        buy_price=self.buy_price,
+                        buy_tax=self.buy_tax,
+                        quantity=self.position,
+                        sell_date=self.data.index[self.index],
+                        sell_price=sell_price,
+                        sell_tax=sell_tax,
+                        days=days_difference,
+                        profit=profit,
+                    )
 
                     self.position = 0
                     self.buy_price = None
@@ -132,7 +167,9 @@ class StockBacktest:
 
         buy_count = self.win_count + self.lose_count
         self.win_rate = self.win_count / buy_count if buy_count > 0 else 0
-        self.logger.info(f"{self.stock_id}: 總金額 {self.cash}, 下注次數 {buy_count} , 獲利次數{self.win_count} 勝率 {self.win_rate:.2%}")
+        self.logger.info(
+            f"{self.stock_id}: 總金額 {self.cash}, 下注次數 {buy_count} , 獲利次數{self.win_count} 勝率 {self.win_rate:.2%}"
+        )
 
 
 if __name__ == "__main__":

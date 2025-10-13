@@ -15,8 +15,12 @@ def extract_log_summary(strategy_log_folder: str = "./strategy_log") -> str:
         str: 匯出的 Excel 路徑
     """
     # 正則表達式
-    overall_pattern = re.compile(r"總計:總營利(?P<total_profit>[\d.-]+), 股票數量(?P<stock_count>\d+),總下注量:(?P<total_count>\d+),每注獲利 [\d.]+, 獲勝次數(?P<total_win>\d+), 總勝率 (?P<total_win_rate>[\d.]+)%")
-    hold_pattern = re.compile(r"持有天數統計: 最大 (?P<max>\d+), 最小 (?P<min>\d+), 平均 (?P<avg>[\d.]+), 標準差 (?P<std>[\d.]+), 眾數 (?P<mode>.+)")
+    overall_pattern = re.compile(
+        r"總計:總營利(?P<total_profit>[\d.-]+), 股票數量(?P<stock_count>\d+),總下注量:(?P<total_count>\d+),每注獲利 [\d.]+, 獲勝次數(?P<total_win>\d+), 總勝率 (?P<total_win_rate>[\d.]+)%"
+    )
+    hold_pattern = re.compile(
+        r"持有天數統計: 最大 (?P<max>\d+), 最小 (?P<min>\d+), 平均 (?P<avg>[\d.]+), 標準差 (?P<std>[\d.]+), 眾數 (?P<mode>.+)"
+    )
 
     summary_rows = []
 
@@ -61,7 +65,7 @@ def extract_log_summary(strategy_log_folder: str = "./strategy_log") -> str:
     summary_df = pd.DataFrame(summary_rows)
     summary_df = summary_df.sort_values(by="總營利", ascending=False)
 
-    output_path = os.path.join(strategy_log_folder, "log_overall_summary.xlsx")
+    output_path = os.path.join(strategy_log_folder, "log_overall_120_200_summary.xlsx")
     summary_df.to_excel(output_path, index=False)
 
     return output_path
@@ -128,7 +132,7 @@ def stock_targer_win(label_folder: str = "./stock_data/leaning_label") -> str:
                 win_rate_cols.append(winrate_col)
 
     # ✅ 匯出結果
-    output_path = os.path.join(label_folder, "stock_targer_win.xlsx")
+    output_path = os.path.join(label_folder, "stock_targer_120_200_win.xlsx")
     clean_df.to_excel(output_path, index=False)
     print(f"✅ 勝率統計完成，檔案儲存於：{output_path}")
 
