@@ -7,7 +7,7 @@ import statistics
 
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
-from _02_strategy.single_strategy import StockBacktest
+from _02_strategy.base.single_strategy import StockBacktest
 from _04_deeplearning.model_process import DpTrainerBisis
 from _04_deeplearning.unit import DEFAULT_FEATURE_COLUMNS
 from modules.config_loader import load_config
