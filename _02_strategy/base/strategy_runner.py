@@ -68,6 +68,7 @@ class StrategyRunner:
                     initial_cash=self.initial_cash,
                     split_cash=5000,
                     label=label,
+                    show_logger=self.show_each_stock,
                 )
                 bt.run_backtest()
             except Exception as e:
@@ -84,14 +85,12 @@ class StrategyRunner:
 
             if self.show_each_stock:
                 self.log.info(
-                    f"{stock_id}: 最終資金 {bt.cash:,.0f}, "
-                    f"交易 {buy_count} 次, 勝率 {bt.win_rate:.2%}, 獲利 {profit:,.0f}"
+                    f"{stock_id}: 最終資金 {bt.cash:,.0f}, " f"交易 {buy_count} 次, 勝率 {bt.win_rate:.2%}, 獲利 {profit:,.0f}"
                 )
 
         # =================== 統計 =====================
         self._analyze_results(
-            collections, total_win, total_lose, total_profit, all_hold_days, all_records,
-            start_date, end_date
+            collections, total_win, total_lose, total_profit, all_hold_days, all_records, start_date, end_date
         )
 
         close_mongo_client()
@@ -227,33 +226,37 @@ class StrategyRunner:
             df.to_csv(trades_path, index=False, encoding="utf-8-sig")
 
             summary_path = os.path.join(output_folder, f"{self.label}_summary.csv")
-            summary_df = pd.DataFrame([{
-                "回測起始日": start_date,
-                "回測結束日": end_date,
-                "股票數量": len(collections),
-                "交易次數": buy_count,
-                "勝率(%)": round(win_rate * 100, 2),
-                "平均獲利金額": round(avg_win, 2),
-                "平均虧損金額": round(avg_lose, 2),
-                "平均獲利報酬率(%)": round(avg_win_rate, 2),
-                "平均虧損報酬率(%)": round(avg_lose_rate, 2),
-                "最大獲利": round(max_win, 2),
-                "最大虧損": round(max_lose, 2),
-                "平均持有天數": round(avg_hold_days, 2),
-                "期望報酬值(EV)": round(expect_value, 2),
-                "總獲利": round(total_profit, 2),
-                "IQR獲利下限": round(win_low, 2) if win_low is not None else np.nan,
-                "IQR獲利上限": round(win_high, 2) if win_high is not None else np.nan,
-                "IQR虧損下限": round(lose_low, 2) if lose_low is not None else np.nan,
-                "IQR虧損上限": round(lose_high, 2) if lose_high is not None else np.nan,
-                "排除極值後平均獲利金額": round(avg_win_trim, 2),
-                "排除極值後平均虧損金額": round(avg_lose_trim, 2),
-                "排除極值後期望報酬值(EV,Trim)": round(expect_trim, 2),
-                "獲利信賴區間下限(95%)": win_ci_low,
-                "獲利信賴區間上限(95%)": win_ci_high,
-                "虧損信賴區間下限(95%)": lose_ci_low,
-                "虧損信賴區間上限(95%)": lose_ci_high,
-            }])
+            summary_df = pd.DataFrame(
+                [
+                    {
+                        "回測起始日": start_date,
+                        "回測結束日": end_date,
+                        "股票數量": len(collections),
+                        "交易次數": buy_count,
+                        "勝率(%)": round(win_rate * 100, 2),
+                        "平均獲利金額": round(avg_win, 2),
+                        "平均虧損金額": round(avg_lose, 2),
+                        "平均獲利報酬率(%)": round(avg_win_rate, 2),
+                        "平均虧損報酬率(%)": round(avg_lose_rate, 2),
+                        "最大獲利": round(max_win, 2),
+                        "最大虧損": round(max_lose, 2),
+                        "平均持有天數": round(avg_hold_days, 2),
+                        "期望報酬值(EV)": round(expect_value, 2),
+                        "總獲利": round(total_profit, 2),
+                        "IQR獲利下限": round(win_low, 2) if win_low is not None else np.nan,
+                        "IQR獲利上限": round(win_high, 2) if win_high is not None else np.nan,
+                        "IQR虧損下限": round(lose_low, 2) if lose_low is not None else np.nan,
+                        "IQR虧損上限": round(lose_high, 2) if lose_high is not None else np.nan,
+                        "排除極值後平均獲利金額": round(avg_win_trim, 2),
+                        "排除極值後平均虧損金額": round(avg_lose_trim, 2),
+                        "排除極值後期望報酬值(EV,Trim)": round(expect_trim, 2),
+                        "獲利信賴區間下限(95%)": win_ci_low,
+                        "獲利信賴區間上限(95%)": win_ci_high,
+                        "虧損信賴區間下限(95%)": lose_ci_low,
+                        "虧損信賴區間上限(95%)": lose_ci_high,
+                    }
+                ]
+            )
             summary_df.to_csv(summary_path, index=False, encoding="utf-8-sig")
 
             self.log.info(f"✅ 已輸出交易記錄：{trades_path}")

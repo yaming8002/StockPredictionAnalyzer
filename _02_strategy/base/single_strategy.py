@@ -19,12 +19,14 @@ class StockBacktest:
         split_cash=0,
         label="backtest",
         loglevel=logging.INFO,
+        show_logger=False,
     ):
         self.stock_id = stock_id
         self.label = label
         self.start_date = start_date
         self.end_date = end_date
         self.initial_cash = initial_cash
+        self.show_logger = show_logger
         self.db = get_mongo_client()
         self.win_count = 0
         self.lose_count = 0
@@ -167,9 +169,10 @@ class StockBacktest:
 
         buy_count = self.win_count + self.lose_count
         self.win_rate = self.win_count / buy_count if buy_count > 0 else 0
-        self.logger.info(
-            f"{self.stock_id}: 總金額 {self.cash}, 下注次數 {buy_count} , 獲利次數{self.win_count} 勝率 {self.win_rate:.2%}"
-        )
+        if self.show_logger:
+            self.logger.info(
+                f"{self.stock_id}: 總金額 {self.cash}, 下注次數 {buy_count} , 獲利次數{self.win_count} 勝率 {self.win_rate:.2%}"
+            )
 
 
 if __name__ == "__main__":

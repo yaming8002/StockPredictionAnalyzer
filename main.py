@@ -2,28 +2,10 @@ import argparse
 
 from _01_data.download_stock import process_all_stocks
 from _01_data.to_mongoDB import process_csv_files, remove_mongoDB
-
 from _01_data.unit import STOCK_LIST
-from _02_strategy import ma_strategy_optimization
-
-
-from _02_strategy.bollinger_strategy import run_bolling_list
 from _02_strategy.dow_strategy import run_dow_backtest
-from _02_strategy.ma_sell_strategy import run_ma_sell_list
-from _02_strategy.ma_strategy import run_ma_backtest, run_ma_by_stock
-from _02_strategy.ma_strategy_optimization_3_year import ot_run_pre_3_year_ma_backtest
-from _02_strategy.turtle_strategy import run_turtle_list
-from _02_strategy.volue_strategy import run_VolumeMA5_list
-
-
-# from _03_deeplearning.sma_20_50_d import test_04_train_model, test_05_predict_from_model
-
 from _04_analysis.analyze_log import extract_log_summary, stock_targer_win
-
 from _05_deeplearning.unit import test_03_data_view
-
-from _07_verification.sample_stock_data_for_review import sample_stock_signals_for_2025
-
 from _09_market.generate_dow_tomorrow_buy_list import generate_tomorrow_buy_list, generate_tomorrow_sell_list
 from modules.config_loader import load_config
 from modules.process_mongo import close_mongo_client
@@ -71,25 +53,15 @@ if __name__ == "__main__":
         process_csv_files()
     if args.command == "removemongo":
         remove_mongoDB()
-    if args.command == "test":
-        run_ma_backtest()
+
     if args.command == "col_log":
         extract_log_summary()
     if args.command == "test_03_data_view":
         test_03_data_view()
-    if args.command == "run_bolling_list":
-        run_bolling_list()
-    if args.command == "run_turtle_list":
-        run_turtle_list()
+
     if args.command == "stock_targer_win":
         stock_targer_win()
 
-    if args.command == "run_ma_by_stock":
-        run_ma_by_stock(
-            stock_list=STOCK_LIST,
-            start_date="2010-01-01",
-            end_date="2020-12-31",
-        )
     if args.command == "test_04_train_model":
         file_path = "./stock_data/leaning_label/sma_20_sma_50_trades.csv"
         model_path = "model_20_50_stream_cnn.h5"
@@ -100,21 +72,8 @@ if __name__ == "__main__":
         model_path = "model_stream_cnn.h5"
         # test_05_predict_from_model(file_path, model_path)
 
-
-    if args.command == "ma_strategy_optimization":
-        ma_strategy_optimization.ot_run_ma_backtest()
-
     if args.command == "dow_strategy":
         run_dow_backtest()
-
-    if args.command == "ma_volumne":
-        run_VolumeMA5_list()
-
-    if args.command == "run_ma_sell_list":
-        run_ma_sell_list()
-
-    if args.command == "sample_stock_data":
-        sample_stock_signals_for_2025(sample_size=10, year=2025)
 
     if args.command == "tomorrow_buy":
         notdonwload = args.notdownload is None
