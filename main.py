@@ -5,7 +5,10 @@ from _01_data.to_mongoDB import process_csv_files, remove_mongoDB
 from _01_data.unit import STOCK_LIST
 from _02_strategy.dow_strategy import run_dow_backtest
 from _04_analysis.analyze_log import extract_log_summary, stock_targer_win
-from _05_deeplearning.unit import test_03_data_view
+
+from _05_deeplearning.export_mongo_to_csv import export_mongo_to_csv
+from _05_deeplearning.policy_evolve import run_deep_backtest
+from _09_market import generate_dow_tomorrow_buy_cmf_list
 from _09_market.generate_dow_tomorrow_buy_list import generate_tomorrow_buy_list, generate_tomorrow_sell_list
 from modules.config_loader import load_config
 from modules.process_mongo import close_mongo_client
@@ -56,8 +59,8 @@ if __name__ == "__main__":
 
     if args.command == "col_log":
         extract_log_summary()
-    if args.command == "test_03_data_view":
-        test_03_data_view()
+    # if args.command == "test_03_data_view":
+    #     test_03_data_view()
 
     if args.command == "stock_targer_win":
         stock_targer_win()

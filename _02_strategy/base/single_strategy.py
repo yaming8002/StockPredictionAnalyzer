@@ -1,6 +1,7 @@
 from datetime import datetime
 import logging
 import math
+import os
 import pandas as pd
 from modules.config_loader import load_config
 from modules.logger import setup_logger
@@ -44,12 +45,52 @@ class StockBacktest:
         self.fetch_data()
 
     def fetch_data(self) -> None:
-        collection = self.db[self.stock_id]
-        cursor = collection.find({"date": {"$gte": self.start_date, "$lte": self.end_date}}, no_cursor_timeout=True)
-        self.data = pd.DataFrame(list(cursor))  # 一次抓出避免 cursor 被中斷
+        """
+        ✅ 改成: 優先讀 CSV → 若無資料才讀 MongoDB
+        """
+
+        # ✅ CSV 儲存資料夾
+        csv_path = f"./stock_data/dataset/{self.stock_id}.csv"
+
+        # ---------------------------
+        # ✅ Step 1: 優先從 CSV 讀取
+        # ---------------------------
+        if os.path.exists(csv_path):
+            try:
+                self.data = pd.read_csv(csv_path)
+                self.data["date"] = pd.to_datetime(self.data["date"])
+                self.data.set_index("date", inplace=True)
+
+                # ✅ 裁切日期 start_date ~ end_date
+                self.data = self.data.loc[self.start_date : self.end_date]
+
+                if not self.data.empty:
+                    return  # ✅ CSV 成功讀取結束
+
+                print(f"⚠ CSV {self.stock_id} 資料不足，改從 Mongo 讀取...")
+
+            except Exception as e:
+                print(f"❌ CSV 讀取錯誤：{e}，改從 Mongo 讀取...")
+
+        # ---------------------------
+        # ✅ Step 2: Fallback → MongoDB
+        # ---------------------------
+        print(f"⬇ 從 MongoDB 讀取 {self.stock_id}")
+
+        db = get_mongo_client()
+        collection = db[self.stock_id]
+        cursor = collection.find(
+            {"date": {"$gte": self.start_date, "$lte": self.end_date}},
+            no_cursor_timeout=True,
+        )
+
+        self.data = pd.DataFrame(list(cursor))
+        cursor.close()
+
         if self.data.empty:
-            self.logger.warning(f"{self.stock_id}: 無法從 MongoDB 獲取數據")
+            self.logger.warning(f"⚠ {self.stock_id}: 無法從 MongoDB 獲取數據")
             return None
+
         self.data["date"] = pd.to_datetime(self.data["date"])
         self.data.set_index("date", inplace=True)
 
