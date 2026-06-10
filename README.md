@@ -1,199 +1,95 @@
-# 股票回測專案說明
+# StockPredictionAnalyzer
 
-## modules
-存放通用的項目
-### 1. `process_mongo.py`
-**功能：**
-- 取得 MongoDB 連線設定。
+台股量化的**公開教學鏡像**：從「取得資料 → 計算指標 → 用 vectorbt 回測 → 分析結果」一條龍，搭配部落格系列文章。
+資料一律落地成 parquet（或 csv），回測引擎統一用 **vectorbt**，策略只需「記錄買賣條件」。
 
-**主要函數：**
-- `get_mongo_client()`：從 `config.json` 讀取 MongoDB 設定，返回 MongoDB 資料庫對象。
+> 所有 Python 執行建議前綴 UTF-8（避免 Windows cp950 中文出錯）：
+> `PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python ...`
+> 安裝相依：`pip install -r requirements.txt`（vectorbt / pandas / numpy）
 
 ---
 
-### 2. `config_loader.py`
-**功能：**
-- 負責讀取 `config.json` 配置檔案。
+## 目錄結構
 
-**主要函數：**
-- `load_config(config_file=None)`：讀取並返回設定值。
-
----
-
-### 3. `logger.py`
-**功能：**
-- 建立 `logger`，顯示在終端並寫入 log 檔案。
-
-**主要函數：**
-- `setup_logger(log_file=None)`：建立 `log` 記錄，避免重複添加 handler，並輸出到終端與檔案。
-
-
-
-## 01_data
-資料的取得及建置
-### 1. `download_stock.py`
-**功能：**
-- 依照股票清單下載對應的股票價格。
-- 下載的資料來自 Yahoo Finance，並轉換為 pandas DataFrame 格式。
-- 下載的數據包括 `date`, `open`, `high`, `low`, `close`, `volume`。
-- 下載後存入指定的資料夾，或批次下載所有股票。
-
-**主要函數：**
-- `download_stock_data(symbol, start_date, end_date, save_path)`：下載單個股票的數據。
-- `process_stock(symbol, save_path)`：下載並存入對應資料夾。
-- `process_all_stocks(stock_list_file, save_path)`：批次下載股票數據。
-- `download_all_stocks()`：從 `stock_List.csv` 讀取股票清單並下載所有股票數據。
+| 路徑 | 用途 |
+|---|---|
+| `_01_data/` | 取得股票清單、下載股價、計算技術指標 |
+| `_02_strategy/` | **單股**策略（vbt 框架 + 策略） |
+| `_03_multi_strategy/` | **多股組合**策略（同一本金、共用資金；vbt 框架） |
+| `_04_analysis/` | 回測輸出的數據分析 |
 
 ---
 
-### 2. `stock_technical.py`
-**功能：**
-- 提供技術分析的計算函數，如移動平均線 (SMA, EMA)、MACD、RSI、布林通道。
+## `_01_data/` — 資料取得與指標
 
-**主要函數：**
-- `calculate_sma(data, window=20)`：計算簡單移動平均線 (SMA)。
-- `calculate_ema(data, span=20)`：計算指數移動平均線 (EMA)。
-- `calculate_macd(data, short_period=12, long_period=26, signal_period=9)`：計算 MACD 指標。
-- `calculate_rsi(data, period=14)`：計算 RSI 指標。
-- `calculate_bollinger_bands(data, window=20, num_std=2)`：計算布林通道 (Bollinger Bands)。
+- **`fetch_stock_list.py`**：從 TWSE/TPEx 官方 ISIN 表抓最新台股清單 → `stock_list.csv`（含名稱/產業/上市日）。
+- **`download_stock.py`**：用 yfinance 下載 OHLCV，存 csv 或 parquet。
+  - `download_stock_data(symbol, ...)`：單檔下載（穩定）。
+  - `download_stock_data_multi(stock_list_file, ...)`：批次下載（快，適合每日增量）。
+  - `save_prices(df, save_path, symbol, fmt)`：存檔（`csv` / `parquet`）。
+- **`download_full_history.py`**：大量、可續傳的全史下載（checkpoint、失敗重試、進度估算），沿用 `download_stock.py`。
+- **技術指標**（純函式，輸入含 OHLCV 的 DataFrame，回傳多了指標欄位的 DataFrame），依「衡量什麼」分三組：
+  - `indicators_trend.py` — 趨勢：SMA / EMA / MACD / 布林 / BIAS
+  - `indicators_momentum_volume.py` — 量能動能：RSI / KD / CMF / OBV
+  - `indicators_volatility.py` — 波動：ATR% / 報酬率波動率 / 唐奇安通道
+  - `stock_technical.py` — 聚合入口：re-export 上三組全部函式 + `add_all_indicators()` 一次套用
 
----
+## `_02_strategy/` — 單股策略（vbt）
 
-### 3. `to_mongoDB.py`
-**功能：**
-- 將 CSV 檔案處理後匯入 MongoDB。
-- 增加技術指標 (SMA, EMA, Bollinger Bands)。
-- 清空 MongoDB 中的指定資料庫。
+把 vectorbt 包成「繼承基底、只覆寫買賣條件」的開發手感。
 
-**主要函數：**
-- `process_csv_files()`：讀取 CSV 檔案，計算技術指標後存入 MongoDB。
-- `calculate_working(df)`：計算技術指標並回傳處理後的 DataFrame。
-- `remove_mongoDB()`：清空 MongoDB 中的 `stock_analysis` 集合。
+- **`base/vbt/`** — vbt 策略套件（框架）
+  - `common.py`：台股 tick 進位、精確費用重建（手續費 min 20 + 賣方證交稅）、summary 組裝。
+  - `single.py`：`VbtSingleStrategy` 基底。子類**只覆寫** `add_columns` / `buy_signal` / `sell_signal`（可選 `exec_price` / `build_signals`），引擎 / 費用 / 後處理由基底處理。
+- **`ma_strategy/`** — 均線相關策略
+  - `ma_cross_strategy.py`：雙均線交叉（2 日確認），`MACross_20_50` / `MACross_50_200`。
+  - `single_ma_strategy.py`：單一均線突破（上穿買、下穿賣），附「測試資料中所有 MA 期數」的分析。
 
----
+寫新策略範式：
+```python
+from _02_strategy.base.vbt.single import VbtSingleStrategy
 
-## 02_strategy
-回測功能
-### 1. `single_strategy.py`
-**功能：**
-- 提供單一股票價格回測的抽象類別。
-- 負責設定回測範圍、手續費、風險管理。
-- 記錄交易資訊，計算勝率及最終資產。
+class MyStrat(VbtSingleStrategy):
+    def add_columns(self, df):
+        df["sma20"] = df["close"].rolling(20).mean(); return df
+    def buy_signal(self, df):  return df["close"] > df["sma20"]
+    def sell_signal(self, df): return df["close"] < df["sma20"]
 
-**主要函數：**
-- `buy_signal(self, data, index)`：判斷買入條件。
-- `sell_signal(self, data, index)`：判斷賣出條件。
-- `run_backtest()`：執行回測，統計交易結果。
-
----
-## 03_deeplearning
-深度學習訓練
-
-### 1. DpTrainerBisis
-**功能：**
-
-- 提供一個通用的深度學習訓練框架，適合 LSTM 類型的模型進行訓練、驗證、儲存以及繪圖顯示。
-- 支援 One-Hot 編碼的多類別分類，以及標量類型的二元分類。
-
-**主要屬性：**
-
-- file_path：訓練資料檔案的路徑。
-- save_path：訓練後儲存模型的路徑。
-- input_shape：輸入資料的形狀 (time_steps, features)。
-- output_shape：輸出的類別數目（One-Hot 時為 2）。
-- optimizer：優化器（預設為 Adam）。
-- is_onehot：是否使用 One-Hot 編碼。
-- batch_size：訓練的批次大小。
-- epochs：最大訓練回合數。
-- model：Keras 模型實例。
-- history：儲存每個 Epoch 的訓練與驗證記錄。
-
-**主要函數：**
-- __init__(self, file_path, save_path, input_shape, output_shape, optimizer=None, is_onehot=False, batch_size=64, epochs=100)
-初始化模型的基本參數。
-根據 is_onehot 設定 loss function：
-如果是 True，則使用 categorical_crossentropy。
-如果是 False，則使用 sparse_categorical_crossentropy。
-初始化歷史記錄 self.history。
-呼叫 build_model() 建立模型並進行編譯。
-
-- build_model(self)
-抽象方法，必須在子類別中實作。
-
-負責構建實際的 LSTM 模型結構。
-
-- tranging_model(self)
-    負責完整的模型訓練過程，包括：
-    載入資料並切割為訓練集與驗證集（95% / 5%）。
-    設定 class_weight 平衡正負樣本。
-    呼叫 fit() 執行模型訓練。
-    呼叫 evaluate() 進行評估。
-    呼叫 save_model() 儲存最佳模型。
-    呼叫 plot_history() 顯示學習曲線。
-
-- fit(self, train_df, val_df, class_weight, patience=5)，負責模型的迭代訓練。
-    每次 Epoch 重新打亂資料。
-    使用 class_weight 來平衡正負類別。
-    執行 Early Stopping，若 patience 次數內沒有改善則終止。
-    儲存最佳模型權重。
-    早期停止條件：
-    如果 val_loss 無法在 patience 次數內降低，則恢復到最佳模型。
-
-- create_data_generator(self, dataframe)：建立資料生成器，支援：
-    - One-Hot 編碼模式
-    - 標量類型模式
-    - 使用 tf.data.Dataset.from_generator 創建資料流。
-        資料會經過：
-        - 分批讀取 (batch)
-        - 提前載入 (prefetch)
-
-- evaluate(self, val_df)
-    負責評估模型的效能。
-    輸出測試集的準確率與損失。
-
-- save_model(self)
-    將模型儲存至指定路徑。
-    使用 .h5 格式進行儲存，包含優化器參數。
-
-- plot_history(self)
-    繪製模型在訓練過程中的學習曲線。
-    包含：
-    - 訓練準確率 (Train Accuracy)
-    - 驗證準確率 (Validation Accuracy)
-    - 訓練損失 (Train Loss)
-    - 驗證損失 (Validation Loss)
-
-**使用範例 **
+res = MyStrat(split_cash=10_000).run(df, stock_id="2330.TW")
+# res = {"trades": DataFrame, "summary": dict}
 ```
-from tensorflow.keras.optimizers import Adam
-from custom_lstm_model import CustomLSTMModel
-# 建構自訂義的model
-class CustomLSTMModel(DpTrainerBisis):
-    def build_model(self):
-        inputs = Input(shape=self.input_shape, name="Input_Layer")
-        x = LSTM(64, return_sequences=True, name="LSTM_1")(inputs)
-        x = Dropout(0.5, name="Dropout_1")(x)
-        x = Flatten()(x)
-        x = Dense(128, activation="relu", name="Dense_Layer1")(x)
-        x = BatchNormalization(name="BatchNorm")(x)
-        outputs = Dense(self.output_shape, activation="softmax", name="Output_Layer")(x)
-        return Model(inputs=inputs, outputs=outputs, name="LSTM_Model")
 
-file_path = "./stock_data/leaning_label/turtle_trades.csv"
-model_path = "run_turtle_deep_01.h5"
-optimizer = Adam(learning_rate=0.0001)
-# 載入設定
-trainer = CustomLSTMModel(
-    file_path=file_path,
-    save_path=model_path,
-    is_onehot=True,
-    input_shape=(30, 19),
-    output_shape=2,
-    optimizer=optimizer
-)
-# 訓練
-trainer.tranging_model()
+## `_03_multi_strategy/` — 多股組合（vbt）
 
+- **`base/vbt/multi.py`** — `VbtMultiStrategy` 基底：單一共用現金池（`cash_sharing`），現金不足時擋單，可覆寫 `priority` 自訂買入優先序。台股費用沿用 `_02` 的 `common`（依賴方向 `_03 → _02`）。
+- 輸入 `data_dict = {stock_id: df}`，輸出 `{trades, summary, failed_orders_approx}`。
 
+## `_04_analysis/` — 數據分析
+
+- **`analyze_vbt.py`** — 吃 `VbtSingleStrategy.run()` 的輸出（trades / summary）：
+  - `hold_days_stats(trades)`：持有天數分布
+  - `yearly_performance(trades)`：依買入年份的勝率 / 損益
+  - `monte_carlo(trades, ...)`：對 `real_pnl` 做 bootstrap 蒙地卡羅（含破產機率）
+  - `portfolio_stats(pf)`：取 vbt `Portfolio` 內建統計
+  - `full_report(result, pf=)`：一次印全部
+
+---
+
+## 快速開始
+
+```bash
+pip install -r requirements.txt
+
+# 1. 取得最新股票清單
+python _01_data/fetch_stock_list.py
+
+# 2. 下載單檔（台積電）存 parquet
+python -c "from _01_data.download_stock import download_stock_data; download_stock_data('2330.TW', save_path='_01_data/data', fmt='parquet')"
+
+# 3. 跑一支均線交叉回測
+python _02_strategy/ma_strategy/ma_cross_strategy.py _01_data/data/2330.TW.parquet
 ```
-//
+
+---
+
+*本專案為技術分享，所列指標、策略與程式碼僅供學習參考，非投資建議。*

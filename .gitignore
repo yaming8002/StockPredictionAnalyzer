@@ -1,12 +1,5 @@
-*original
-*clean
-*.pyc
-*.log
-*.csv
-/uvenv/*
-/stock_data/*
-/processed_data/*
-/strategy_log/*
-/sample_output/*
-/_09_market/*
+# 回測 / 分析輸出，不進公開 repo
+strategy_log/
 
+# Python 快取
+__pycache__/

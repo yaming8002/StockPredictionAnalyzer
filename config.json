@@ -1,9 +1,0 @@
-{
-    "stock_list_path": "./stock_data/stock_list.csv",
-    "original_data_folder": "./stock_data/original",
-    "clean_data_folder": "../stock_data/clean",
-    "strategy_log_folder": "./strategy_log",
-    "leaning_folder": "./stock_data/leaning_label",
-    "mongo_uri": "mongodb://127.0.0.1:27017",
-    "use_mongodb": true
-}
