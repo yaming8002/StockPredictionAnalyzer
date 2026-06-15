@@ -13,8 +13,10 @@
 優化紀錄（每次一行；N = 本策略檔自己的累計次數；切換靠「註解」非參數，各 #N 獨立可疊加）：
   #1 2026-06-15 雙日確認進場：突破當天不買，要隔日收盤仍站上 MA 才判定買進
      （過濾一日假突破）。切換 = buy_signal 內標「# 優化 #1」那行。
-  #2 2026-06-15 量能濾網：判定日要 5 日均量 > 20 日均量（近期量增）且 5 日均量 > 100 萬股
-     （流動性），過濾無量假突破與冷門股。切換 = buy_signal 內標「# 優化 #2」那行。
+  #2 2026-06-15 量能濾網（測試後不採用，預設註解）：試過 (a) 量增+門檻、(b) 只流動性門檻>100萬股，
+     兩版 EV / EV(Trim) / Profit Factor 皆輸 opt1（策略正期望值多來自低流動性小型股的肥尾，
+     量能門檻會把它刷掉）。見 reference 2026-06-15_single-ma_opt2_volume-filter.md。
+     切換 = buy_signal 內標「# 優化 #2」那行（取消註解＝啟用只門檻版）。
 
 執行（全市場單一 MA，掃整個資料夾、彙總；結果寫策略同目錄 ./result）：
   優化 #1（預設，# 優化 #1 行不註解）：
@@ -72,16 +74,15 @@ class SingleMAStrategy(VbtSingleStrategy):
         進場「判定日」訊號（基底會自動延到隔日開盤成交）。
 
         baseline：當日收盤上穿 MA（突破當天判定）。
-        優化 #1（雙日確認）：突破隔日收盤仍站上 MA 才判定（多等一天，過濾一日假突破）。
-        優化 #2（量能濾網）：判定日要 5 日均量 > 20 日均量（近期量增）且 5 日均量 > 100 萬股
-                          （流動性門檻），過濾無量假突破與冷門股。
+        優化 #1（雙日確認，預設啟用）：突破隔日收盤仍站上 MA 才判定（多等一天，過濾一日假突破）。
+        優化 #2（量能濾網，測試後不採用、預設註解）：取消註解＝只留流動性門檻 5 日均量 > 100 萬股。
 
         ▶ 切換：每個「# 優化 #N」獨立一行，可各自註解／取消註解疊加；全註解 = baseline。
         """
         above = df["close"] > df["ma"]
         signal = above & ~above.shift(1, fill_value=False)   # baseline：突破當日判定
         signal = above & signal.shift(1, fill_value=False)   # 優化 #1：雙日確認（註解此行 → 不做隔日確認）
-        signal = signal & (df["vol_ma5"] > df["vol_ma20"]) & (df["vol_ma5"] > 1_000_000)  # 優化 #2：量能濾網（5日均量>20日均量 且 >100萬股；註解此行 → 不套量能）
+        # signal = signal & (df["vol_ma5"] > 1_000_000)  # 優化 #2：量能濾網（測試後不採用，預設註解；取消註解＝只留流動性門檻 5日均量>100萬股。詳見 reference 2026-06-15 opt2）
         return signal
 
     def sell_signal(self, df: pd.DataFrame) -> pd.Series:
@@ -120,7 +121,7 @@ def main(argv) -> int:
     parser = argparse.ArgumentParser(description="單一均線突破：資料夾批次回測")
     parser.add_argument("folder", help="OHLCV parquet 資料夾路徑")
     parser.add_argument("--ma", type=int, default=20, help="單一 MA 期數（預設 20）")
-    parser.add_argument("--variant", choices=("baseline", "opt1", "opt2"), default="opt1",
+    parser.add_argument("--variant", choices=("baseline", "opt1", "opt2", "opt2b"), default="opt1",
                         help="輸出資料夾分流（result/single_ma/<variant>/）；行為切換靠 buy_signal "
                              "內『# 優化 #1』那行的註解，--variant 只決定寫去哪，兩者請保持一致")
     parser.add_argument("--trades", action="store_true",
