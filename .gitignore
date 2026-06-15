@@ -1,5 +1,6 @@
 # 回測 / 分析輸出，不進公開 repo
 strategy_log/
+result/
 
 # Python 快取
 __pycache__/

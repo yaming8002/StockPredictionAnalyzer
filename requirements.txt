@@ -2,3 +2,4 @@
 vectorbt
 pandas
 numpy
+scipy

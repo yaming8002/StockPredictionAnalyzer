@@ -9,9 +9,10 @@
 附分析：對資料中所有 MA 期數各跑一次，列出比較。
   期數來源：自動偵測資料欄位 sma_<N>；偵測不到才用 DEFAULT_PERIODS。
 
-執行：
-  PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python _02_strategy/ma_strategy/single_ma_strategy.py <OHLCV parquet 路徑>
+執行（全市場單一 MA，掃整個資料夾、彙總；結果寫策略同目錄 ./result）：
+  PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python _02_strategy/ma_strategy/single_ma_strategy.py <資料夾> --ma 20
 """
+import argparse
 import os
 import re
 import sys
@@ -23,7 +24,11 @@ if _project_root not in sys.path:
 
 import pandas as pd
 
+from _02_strategy.base.vbt import batch
 from _02_strategy.base.vbt.single import VbtSingleStrategy
+
+# 回測結果輸出目錄（策略同目錄底下 ./result，已於 .gitignore 排除）
+RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "result")
 
 # 偵測不到資料欄位時的預設 MA 期數
 DEFAULT_PERIODS = (5, 10, 20, 50, 60, 120, 200)
@@ -75,25 +80,38 @@ def run_all_periods(df: pd.DataFrame, periods=None,
     return results
 
 
-def _load_prices(parquet_path: str) -> pd.DataFrame:
-    """讀單檔 OHLCV parquet。index 須為 DatetimeIndex。"""
-    df = pd.read_parquet(parquet_path)
-    if not isinstance(df.index, pd.DatetimeIndex):
-        raise ValueError("index 必須是 DatetimeIndex（日期）")
-    return df.sort_index()
-
-
 def main(argv) -> int:
-    """CLI：傳入 parquet 路徑，對資料所有 MA 期數各跑一次並列表比較。"""
-    if len(argv) < 2:
-        print("用法: python single_ma_strategy.py <OHLCV parquet 路徑>")
-        return 1
-    df = _load_prices(argv[1])
-    results = run_all_periods(df)
-    print(f"{'MA':>5} {'交易次數':>8} {'勝率(%)':>9} {'期望值(EV)':>12} {'總獲利':>14}")
-    for period, summary in results.items():
-        print(f"{period:>5} {summary['交易次數']:>8} {summary['勝率(%)']:>9} "
-              f"{summary['期望報酬值(EV)']:>12} {summary['總獲利']:>14.0f}")
+    """CLI：指定資料夾，固定單一 MA 期數，掃全部股票各自獨立回測並彙總。"""
+    parser = argparse.ArgumentParser(description="單一均線突破：資料夾批次回測")
+    parser.add_argument("folder", help="OHLCV parquet 資料夾路徑")
+    parser.add_argument("--ma", type=int, default=20, help="單一 MA 期數（預設 20）")
+    parser.add_argument("--trades", action="store_true",
+                        help="另存逐筆交易紀錄（預設不存，只出彙總）")
+    parser.add_argument("--start", default=None, help="起始日 YYYY-MM-DD（可選）")
+    parser.add_argument("--end", default=None, help="結束日 YYYY-MM-DD（可選）")
+    parser.add_argument("--limit", type=int, default=None, help="只跑前 N 檔（測試用）")
+    args = parser.parse_args(argv[1:])
+
+    strat = SingleMAStrategy()
+    strat.MA_PERIOD = args.ma
+
+    result = batch.run_folder(strat, args.folder,
+                              start=args.start, end=args.end, limit=args.limit)
+    label = f"single_ma_{args.ma}"
+    written = batch.write_results(result, RESULT_DIR, label, write_trades=args.trades)
+
+    agg = result["aggregate"]
+    print(f"=== 全市場單一均線突破 MA={args.ma} ===")
+    print(f"參與股票數: {agg['參與股票數']}（失敗 {agg['失敗檔數']} 檔）")
+    print(f"交易次數: {agg['交易次數']}")
+    print(f"勝率(%): {agg['勝率(%)']}")
+    print(f"期望報酬值(EV): {agg['期望報酬值(EV)']}")
+    print(f"總獲利: {agg['總獲利']:.0f}")
+    print(f"輸出目錄: {RESULT_DIR}")
+    for path in written:
+        print(f"  - {os.path.basename(path)}")
+    if result["failed"]:
+        print(f"失敗檔（前 10）: {result['failed'][:10]}")
     return 0
 
 
