@@ -1,11 +1,11 @@
 """
 雙均線交叉策略（MA cross）— ma_strategy 套件下的其中一支方案
 
-繼承 VbtSingleStrategy，**只記錄買賣條件**，引擎 / 費用 / tick / 輸出皆由基底處理。
+繼承 VbtSingleStrategy，**只記錄買賣條件**，隔日成交 / 引擎 / 費用 / tick / 輸出皆由基底處理。
 
 策略邏輯（2 日確認）：
-  進場：short_ma 上穿 long_ma，且上穿後連 2 日維持 → 訊號 bar 開盤買進
-  出場：鏡像（下穿後連 2 日確認）→ 訊號 bar 開盤賣出
+  進場：short_ma 上穿 long_ma，且上穿後連 2 日維持 → 判定買進（基底延到隔日開盤成交）
+  出場：鏡像（下穿後連 2 日確認）→ 判定賣出（基底延到隔日開盤成交）
 
 執行：
   PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python _02_strategy/ma_strategy/ma_cross_strategy.py <OHLCV parquet 路徑>
@@ -36,22 +36,21 @@ class MACrossStrategy(VbtSingleStrategy):
         return df
 
     def buy_signal(self, df: pd.DataFrame) -> pd.Series:
-        """進場：上穿後連 2 日確認（i-3 時 short<=long、i-1 與 i-2 時 short>long）。"""
+        """
+        進場「判定日」：上穿後連 2 日確認（i-2 時 short<=long、i-1 與 i 時 short>long）。
+        基底會把成交延到隔日開盤（即原本的「訊號 bar」）。
+        """
         above = df["ma_short"] > df["ma_long"]
-        return (above.shift(1, fill_value=False)
-                & above.shift(2, fill_value=False)
-                & ~above.shift(3, fill_value=False))
+        return (above
+                & above.shift(1, fill_value=False)
+                & ~above.shift(2, fill_value=False))
 
     def sell_signal(self, df: pd.DataFrame) -> pd.Series:
-        """出場：下穿後連 2 日確認（鏡像進場）。"""
+        """出場「判定日」：下穿後連 2 日確認（鏡像進場）。基底延到隔日開盤成交。"""
         below = df["ma_short"] < df["ma_long"]
-        return (below.shift(1, fill_value=False)
-                & below.shift(2, fill_value=False)
-                & ~below.shift(3, fill_value=False))
-
-    def exec_price(self, df: pd.DataFrame) -> pd.Series:
-        """成交價 = 訊號 bar 開盤（tick 進位由基底 _postprocess 處理）。"""
-        return df["open"]
+        return (below
+                & below.shift(1, fill_value=False)
+                & ~below.shift(2, fill_value=False))
 
 
 # 兩組常用參數（對應原 DualMA_20_50 / DualMA_50_200）
