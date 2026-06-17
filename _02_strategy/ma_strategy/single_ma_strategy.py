@@ -2,21 +2,34 @@
 單一均線突破策略（single MA breakout）— ma_strategy 套件下的方案
 
 繼承 VbtSingleStrategy，只記錄「判定日」買賣條件（隔日開盤成交、費稅、tick 由基底處理）：
-  進場：突破單一 MA。預設＝優化 #1（雙日確認：突破隔日收盤仍站上才判定）；
-        把 buy_signal 內標「# 優化 #1」那行註解掉 → 回 baseline（突破當日判定）。
+  進場：突破單一 MA。**目前啟用 = opt11（最優）= 優化 #7（強 K 突破）+ 優化 #10（突破前 ADX<20 盤整）**。
+        其餘優化以註解保留可重啟；把進場優化全註解掉 → 回 baseline（突破當日判定）。
   出場：收盤「下穿」單一 MA（跌破）。
   成交：判定日的「隔日開盤」（基底統一，有訊號一律隔日成交、不在訊號當日收盤）。
 
 附分析：對資料中所有 MA 期數各跑一次，列出比較。
   期數來源：自動偵測資料欄位 sma_<N>；偵測不到才用 DEFAULT_PERIODS。
 
-優化紀錄（每次一行；N = 本策略檔自己的累計次數；切換靠「註解」非參數，各 #N 獨立可疊加）：
-  #1 2026-06-15 雙日確認進場：突破當天不買，要隔日收盤仍站上 MA 才判定買進
-     （過濾一日假突破）。切換 = buy_signal 內標「# 優化 #1」那行。
-  #2 2026-06-15 量能濾網（測試後不採用，預設註解）：試過 (a) 量增+門檻、(b) 只流動性門檻>100萬股，
-     兩版 EV / EV(Trim) / Profit Factor 皆輸 opt1（策略正期望值多來自低流動性小型股的肥尾，
-     量能門檻會把它刷掉）。見 reference 2026-06-15_single-ma_opt2_volume-filter.md。
-     切換 = buy_signal 內標「# 優化 #2」那行（取消註解＝啟用只門檻版）。
+優化紀錄（#N = 改動序號，依測試先後；切換靠 buy_signal 內「# 優化 #N」註解，各 #N 獨立可疊加；
+         結果以 MA=200「EV/筆 → / PF →」，baseline = 194 / 1.62。完整見 reference/single_ma/）：
+  #1 雙日確認        → 221 / 1.60   小幅，後被 #7 超越
+  #2 量能濾網        → 168 / 1.36（量增）、156 / 1.37（只門檻）  ❌ 砍低流動肥尾
+  #3 CMF>0.1         → 224 / 1.52   △ 長均線 EV 升、PF 混、輸 #7
+  #4 距離出場        → −34 / 0.87   ❌ 失敗，砍贏家全 MA 由賺轉賠（別砍贏家）
+  #5 整理+帶量       → 104 / 1.27   ❌ 輸 baseline
+  #6 在MA下方+帶量   → 127 / 1.31   ❌ 扣分元兇＝帶量
+  #7 強 K 突破       → 282 / 1.73   ✅ 順動能、全 MA 提升【採用】
+  #8 #7+雙日確認     → 240 / 1.55   △ 不如 #7 單獨
+  #9 #7+回檔確認     → 176 / 1.48   ❌ 濾掉不回頭飆股
+  #10 盤整後 ADX     → 207 / 1.69（<25）、249 / 1.85（<20）  ○ 順動能補位
+  #11 #7+#10(ADX<20) → 438 / 2.23   ✅✅ 全測試最佳【採用＝目前啟用】
+  #12 #11+流動性門檻 → 87 / 1.23（>1000張）、136 / 1.36（>300張）
+  （另：多頭排列突破已併入 ma_cross_strategy.py 的 ALIGN 旗標，測試 ❌ 不優於 baseline）
+
+⚠️ 重大但書（流動性體檢）：#11 賣出日成交量中位僅 ~210 張、約 30% < 50 張（賣不掉）。加可成交
+   底線(5日均量>300張)後 edge 大幅蒸發（MA200 PF 2.23→1.36）→ 帳面績效大半來自賣不掉的低流動
+   小型股肥尾；可成交真實 edge 薄（長均線 PF~1.3），不宜當大資金主力。後續測試一律帶「5日均量>300張」
+   底線。完整彙整見 blog/reference/single_ma/single-ma_master-reference.md。
 
 執行（全市場單一 MA，掃整個資料夾、彙總；結果寫策略同目錄 ./result）：
   優化 #1（預設，# 優化 #1 行不註解）：
@@ -63,10 +76,50 @@ class SingleMAStrategy(VbtSingleStrategy):
     MA_PERIOD = 20
 
     def add_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """加單一均線 + 量能均線欄位（量能濾網用）。"""
-        df["ma"] = df["close"].rolling(self.MA_PERIOD).mean()
+        """加單一均線 + 量能均線 + CMF + opt5（突破前整理旗標 / N 日均量）欄位。"""
+        n = self.MA_PERIOD
+        df["ma"] = df["close"].rolling(n).mean()
         df["vol_ma5"] = df["volume"].rolling(5).mean()
         df["vol_ma20"] = df["volume"].rolling(20).mean()
+        # Chaikin Money Flow(20)：資金流向，>0 表買盤積極（opt3 用；自算不靠預存欄位）
+        # MFM = ((C-L)-(H-C))/(H-L)；H==L 時定義為 0（避免除以零）
+        hl = df["high"] - df["low"]
+        mfm = (((df["close"] - df["low"]) - (df["high"] - df["close"])) / hl).where(hl != 0, 0.0)
+        mfv = mfm * df["volume"]
+        df["cmf"] = mfv.rolling(20).sum() / df["volume"].rolling(20).sum()
+        # opt5：N 日均量（帶量比較基準，N=MA 期數）+ 突破前整理旗標
+        df["vol_man"] = df["volume"].rolling(n).mean()
+        m = min((n + 1) // 2, 10)   # 需要的收斂日數 = ceil(N/2)，上限 10（避免長均線門檻過高）
+        # 波動率 = ATR%（TR 的 w 日簡單均值 / 收盤；公式對齊資料 atr_pct_14）。
+        # 窗口 w 隨 MA「等比放大」(14:20 比例)：MA<=20 用 14、MA>20 用 round(MA*14/20)。
+        # 目的：長均線用更平滑的長窗波動，量到對的時間尺度（14 日窗對長均線太跳）。
+        atr_win = 14 if n <= 20 else round(n * 14 / 20)
+        prev_close = df["close"].shift(1)
+        tr = pd.concat([df["high"] - df["low"],
+                        (df["high"] - prev_close).abs(),
+                        (df["low"] - prev_close).abs()], axis=1).max(axis=1)
+        vol = tr.rolling(atr_win).mean() / df["close"]                     # ATR%（窗口隨 MA 放大）
+        contract_below = (vol < vol.shift(1)) & (df["close"] < df["ma"])   # 當日波動較昨日收斂 且 收盤在 MA 下方
+        # 累計（非連續）：突破前 N 日內，contract_below 累計達 m 日即算「整理過」
+        df["consolidated"] = (contract_below.rolling(n).sum().shift(1) >= m).fillna(False)
+        # opt6：不要求波動收斂，只看「突破前在 MA 下方累計 >= ceil(N/2) 日」（長期在均線下）
+        df["below_enough"] = ((df["close"] < df["ma"]).rolling(n).sum().shift(1) >= (n + 1) // 2)
+        # opt7：突破那根 K 線的強度（二選一）—— 長紅(開→收>=5%) 或 跳空開在均線之上
+        df["long_red"] = df["close"] >= df["open"] * 1.05
+        df["gap_over_ma"] = (df["open"] > df["ma"]) & (df["open"] > df["close"].shift(1))
+        # opt10：ADX(14)（Wilder）—— 自算不靠預存欄位。ADX<25 表趨勢弱/盤整
+        high, low, close = df["high"], df["low"], df["close"]
+        prev_c = close.shift(1)
+        up = high.diff(); dn = -low.diff()
+        plus_dm = up.where((up > dn) & (up > 0), 0.0)
+        minus_dm = dn.where((dn > up) & (dn > 0), 0.0)
+        tr14 = pd.concat([high - low, (high - prev_c).abs(), (low - prev_c).abs()], axis=1).max(axis=1)
+        p = 14
+        atr_w = tr14.ewm(alpha=1 / p, adjust=False).mean()
+        plus_di = 100 * plus_dm.ewm(alpha=1 / p, adjust=False).mean() / atr_w
+        minus_di = 100 * minus_dm.ewm(alpha=1 / p, adjust=False).mean() / atr_w
+        dx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di)).fillna(0.0)
+        df["adx"] = dx.ewm(alpha=1 / p, adjust=False).mean()
         return df
 
     def buy_signal(self, df: pd.DataFrame) -> pd.Series:
@@ -74,21 +127,46 @@ class SingleMAStrategy(VbtSingleStrategy):
         進場「判定日」訊號（基底會自動延到隔日開盤成交）。
 
         baseline：當日收盤上穿 MA（突破當天判定）。
-        優化 #1（雙日確認，預設啟用）：突破隔日收盤仍站上 MA 才判定（多等一天，過濾一日假突破）。
+        優化 #1（雙日確認）：突破隔日收盤仍站上 MA 才判定（多等一天，過濾一日假突破）。
         優化 #2（量能濾網，測試後不採用、預設註解）：取消註解＝只留流動性門檻 5 日均量 > 100 萬股。
+        優化 #3（CMF 資金流向，測試後不採用、預設註解）：取消註解＝20 日 CMF > 0.1。
+        優化 #5（正統反轉突破，目前測試中、預設啟用）：突破 + 突破前整理 + 帶量。
+            整理 = 突破前 N(=MA 期數) 日內，累計 min(ceil(N/2),10) 日「波動(ATR%,窗口隨 MA 放大)收斂
+                  且 收盤在 MA 下方」；帶量 = 突破當日 volume > N 日均量。（opt5 啟用時 opt1 暫關）
 
         ▶ 切換：每個「# 優化 #N」獨立一行，可各自註解／取消註解疊加；全註解 = baseline。
         """
         above = df["close"] > df["ma"]
-        signal = above & ~above.shift(1, fill_value=False)   # baseline：突破當日判定
-        signal = above & signal.shift(1, fill_value=False)   # 優化 #1：雙日確認（註解此行 → 不做隔日確認）
-        # signal = signal & (df["vol_ma5"] > 1_000_000)  # 優化 #2：量能濾網（測試後不採用，預設註解；取消註解＝只留流動性門檻 5日均量>100萬股。詳見 reference 2026-06-15 opt2）
+        signal = above & ~above.shift(1, fill_value=False)   # baseline：突破當日（上穿 MA）
+        signal = signal & (df["long_red"] | df["gap_over_ma"])  # 優化 #7：突破那根 K 線需 長紅(開→收>=5%) 或 跳空過均線
+        signal = signal & (df["adx"].shift(1) < 20)  # 優化 #10：突破前一根 K 的 ADX(14) < 20（盤整/弱趨勢後突破）。與 #7 同開＝opt11 組合
+        # signal = signal & (df["vol_ma5"] > 300_000)  # 優化 #12：5 日均量 > 30 萬股(=300張) 流動性門檻（測試用，暫關回 opt11）
+        # signal = above & signal.shift(1, fill_value=False)   # 優化 #1：雙日確認（疊 opt7 後反不如 opt7 單獨，預設關。取消註解＝強突破隔日仍站上才買 = opt8）
+        # signal = signal.shift(1, fill_value=False) & (df["open"] > df["close"]) & above   # 優化 #9：opt7 隔天收黑但沒跌破 MA → 再隔一天買（測試後不採用，預設關）
+        # 以下為測試後不採用的進場濾網（皆輸 baseline，保留可重啟）：
+        # signal = signal & (df["vol_ma5"] > 1_000_000)        # 優化 #2：量能濾網（不採用，見 reference 2026-06-15 opt2）
+        # signal = signal & (df["cmf"] > 0.1)                  # 優化 #3：CMF（不採用，見 reference 2026-06-15 opt3）
+        # signal = signal & df["consolidated"] & (df["volume"] > df["vol_man"])  # 優化 #5：整理+帶量（不採用）
+        # signal = signal & df["below_enough"] & (df["volume"] > df["vol_man"])  # 優化 #6：在 MA 下方+帶量（不採用）
         return signal
 
     def sell_signal(self, df: pd.DataFrame) -> pd.Series:
-        """出場判定日：今天收盤下穿 MA（昨收 >= MA、今收 < MA）。"""
+        """
+        出場「判定日」訊號（基底會自動延到隔日開盤成交）。
+
+        baseline：今天收盤下穿 MA（昨收 >= MA、今收 < MA）。
+        優化 #4（保留下穿出場 + 距離連 3 日縮水也賣）：原下穿出場保留，另加「與 MA 距離
+            dist=close−ma 連續 3 日縮水（dist 一日比一日小）」也賣——鈍化版，避免初版「一停就跑」。
+
+        ▶ 切換：把標「# 優化 #4」那一行【取消註解】→ 疊加 3 日縮水出場；【註解】→ 只用下穿出場。
+        """
         below = df["close"] < df["ma"]
-        return below & ~below.shift(1, fill_value=False)
+        signal = below & ~below.shift(1, fill_value=False)   # baseline 出場：下穿 MA（保留）
+        # 優化 #4（測試後不採用，預設註解；取消註解＝下穿 或 距離連 3 日縮水也賣。詳見 reference 2026-06-15 opt4）
+        # dist = df["close"] - df["ma"]
+        # shrink = dist < dist.shift(1)
+        # signal = signal | (shrink & shrink.shift(1, fill_value=False) & shrink.shift(2, fill_value=False))  # 優化 #4：距離連 3 日縮水也賣
+        return signal
 
 
 def detect_ma_periods(df: pd.DataFrame) -> list:
@@ -121,7 +199,7 @@ def main(argv) -> int:
     parser = argparse.ArgumentParser(description="單一均線突破：資料夾批次回測")
     parser.add_argument("folder", help="OHLCV parquet 資料夾路徑")
     parser.add_argument("--ma", type=int, default=20, help="單一 MA 期數（預設 20）")
-    parser.add_argument("--variant", choices=("baseline", "opt1", "opt2", "opt2b"), default="opt1",
+    parser.add_argument("--variant", choices=("baseline", "opt1", "opt2", "opt2b", "opt3", "opt4", "opt5", "opt6", "opt7", "opt8", "opt9", "opt10", "opt10b", "opt11", "opt12", "opt12b"), default="opt1",
                         help="輸出資料夾分流（result/single_ma/<variant>/）；行為切換靠 buy_signal "
                              "內『# 優化 #1』那行的註解，--variant 只決定寫去哪，兩者請保持一致")
     parser.add_argument("--trades", action="store_true",
