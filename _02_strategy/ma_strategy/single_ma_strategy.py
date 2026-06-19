@@ -50,8 +50,36 @@ if _project_root not in sys.path:
 
 import pandas as pd
 
+from _01_data.indicators_trend import calculate_sma
+from _01_data.indicators_momentum_volume import calculate_cmf
+from _01_data.indicators_volatility import calculate_atr_pct
 from _02_strategy.base.vbt import batch
 from _02_strategy.base.vbt.single import VbtSingleStrategy
+
+
+def _ma(df: pd.DataFrame, window: int) -> pd.Series:
+    """取 sma_{window}：優先用 parquet 既有欄位，無則用 _01_data 的 calculate_sma 補（不在策略內自算）。"""
+    col = f"sma_{window}"
+    if col not in df.columns:
+        calculate_sma(df, window)
+    return df[col]
+
+
+def _cmf(df: pd.DataFrame, window: int = 20) -> pd.Series:
+    """取 cmf_{window}：優先用 parquet 既有欄位，無則用 _01_data 的 calculate_cmf 補。"""
+    col = f"cmf_{window}"
+    if col not in df.columns:
+        calculate_cmf(df, window)
+    return df[col]
+
+
+def _atr_pct(df: pd.DataFrame, window: int) -> pd.Series:
+    """取 atr_pct_{window}：優先用 parquet 既有欄位，無則用 _01_data 的 calculate_atr_pct 補。"""
+    col = f"atr_pct_{window}"
+    if col not in df.columns:
+        calculate_atr_pct(df, window)
+    return df[col]
+
 
 # 回測結果輸出目錄（策略同目錄底下 ./result，已於 .gitignore 排除）
 RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "result")
@@ -76,29 +104,18 @@ class SingleMAStrategy(VbtSingleStrategy):
     MA_PERIOD = 20
 
     def add_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """加單一均線 + 量能均線 + CMF + opt5（突破前整理旗標 / N 日均量）欄位。"""
+        """均線/CMF/ATR% 引用 _01_data 指標；量能均線/K線/ADX 無對應 indicators 故自算。"""
         n = self.MA_PERIOD
-        df["ma"] = df["close"].rolling(n).mean()
-        df["vol_ma5"] = df["volume"].rolling(5).mean()
+        df["ma"] = _ma(df, n)                                   # 引用 sma（_01_data）
+        df["vol_ma5"] = df["volume"].rolling(5).mean()         # 量能均線無對應 indicators，保留自算
         df["vol_ma20"] = df["volume"].rolling(20).mean()
-        # Chaikin Money Flow(20)：資金流向，>0 表買盤積極（opt3 用；自算不靠預存欄位）
-        # MFM = ((C-L)-(H-C))/(H-L)；H==L 時定義為 0（避免除以零）
-        hl = df["high"] - df["low"]
-        mfm = (((df["close"] - df["low"]) - (df["high"] - df["close"])) / hl).where(hl != 0, 0.0)
-        mfv = mfm * df["volume"]
-        df["cmf"] = mfv.rolling(20).sum() / df["volume"].rolling(20).sum()
+        df["cmf"] = _cmf(df, 20)                                # 引用 cmf_20（_01_data）；opt3 用
         # opt5：N 日均量（帶量比較基準，N=MA 期數）+ 突破前整理旗標
         df["vol_man"] = df["volume"].rolling(n).mean()
         m = min((n + 1) // 2, 10)   # 需要的收斂日數 = ceil(N/2)，上限 10（避免長均線門檻過高）
-        # 波動率 = ATR%（TR 的 w 日簡單均值 / 收盤；公式對齊資料 atr_pct_14）。
-        # 窗口 w 隨 MA「等比放大」(14:20 比例)：MA<=20 用 14、MA>20 用 round(MA*14/20)。
-        # 目的：長均線用更平滑的長窗波動，量到對的時間尺度（14 日窗對長均線太跳）。
+        # 波動率 = ATR%，窗口隨 MA「等比放大」(14:20)：MA<=20 用 14、MA>20 用 round(MA*14/20)。引用 calculate_atr_pct。
         atr_win = 14 if n <= 20 else round(n * 14 / 20)
-        prev_close = df["close"].shift(1)
-        tr = pd.concat([df["high"] - df["low"],
-                        (df["high"] - prev_close).abs(),
-                        (df["low"] - prev_close).abs()], axis=1).max(axis=1)
-        vol = tr.rolling(atr_win).mean() / df["close"]                     # ATR%（窗口隨 MA 放大）
+        vol = _atr_pct(df, atr_win)                            # ATR%（窗口隨 MA 放大；_01_data）
         contract_below = (vol < vol.shift(1)) & (df["close"] < df["ma"])   # 當日波動較昨日收斂 且 收盤在 MA 下方
         # 累計（非連續）：突破前 N 日內，contract_below 累計達 m 日即算「整理過」
         df["consolidated"] = (contract_below.rolling(n).sum().shift(1) >= m).fillna(False)
