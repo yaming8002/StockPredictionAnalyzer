@@ -114,6 +114,12 @@ def _trim_block(win_df: pd.DataFrame, lose_df: pd.DataFrame, win_rate: float) ->
     avg_hold_trim = float(kept_all["hold_days"].mean()) if not kept_all.empty else 0.0
     expect_trim = win_rate * avg_win_trim + (1 - win_rate) * avg_lose_trim
 
+    # Trim PF（去極值後獲利因子）：與 EV(Trim) 同一套 MAD 去極值集合上，存活獲利總額 / 存活虧損總額。
+    # 量化「PF 有多少來自肥尾」——raw PF 高但 Trim PF 接近 1，代表 edge 大半靠少數極端大贏單。
+    sum_win_trim = float(win_keep["profit"].sum()) if not win_keep.empty else 0.0
+    sum_lose_trim = abs(float(lose_keep["profit"].sum())) if not lose_keep.empty else 0.0
+    pf_trim = round(sum_win_trim / sum_lose_trim, 4) if sum_lose_trim > 0 else float("inf")
+
     return {
         "IQR獲利下限": round(win_low, 2) if win_low is not None else np.nan,
         "IQR獲利上限": round(win_high, 2) if win_high is not None else np.nan,
@@ -125,6 +131,7 @@ def _trim_block(win_df: pd.DataFrame, lose_df: pd.DataFrame, win_rate: float) ->
         "排除極值後平均虧損報酬率(%)": round(avg_lose_rate_trim, 2),
         "排除極值後平均持有天數": round(avg_hold_trim, 2),
         "排除極值後期望報酬值(EV,Trim)": round(expect_trim, 2),
+        "排除極值後獲利因子(PF,Trim)": pf_trim,
     }
 
 
@@ -133,11 +140,11 @@ def _empty_summary() -> dict:
     keys = ["交易次數", "勝率(%)", "平均獲利金額", "平均虧損金額",
             "平均獲利報酬率(%)", "平均虧損報酬率(%)", "最大獲利", "最大虧損",
             "最大獲利報酬率(%)", "最大虧損報酬率(%)", "平均持有天數",
-            "期望報酬值(EV)", "總獲利", "IQR獲利下限", "IQR獲利上限",
+            "期望報酬值(EV)", "獲利因子(PF)", "總獲利", "IQR獲利下限", "IQR獲利上限",
             "IQR虧損下限", "IQR虧損上限", "排除極值後平均獲利金額",
             "排除極值後平均虧損金額", "排除極值後平均獲利報酬率(%)",
             "排除極值後平均虧損報酬率(%)", "排除極值後平均持有天數",
-            "排除極值後期望報酬值(EV,Trim)",
+            "排除極值後期望報酬值(EV,Trim)", "排除極值後獲利因子(PF,Trim)",
             "獲利信賴區間下限(95%)", "獲利信賴區間上限(95%)",
             "虧損信賴區間下限(95%)", "虧損信賴區間上限(95%)"]
     summary = {k: 0.0 for k in keys}
@@ -174,6 +181,11 @@ def summarize_trades(records: pd.DataFrame) -> dict:
     avg_lose_rate = float(lose_df["profit_rate"].mean()) if not lose_df.empty else 0.0
     expect_value = win_rate * avg_win + (1 - win_rate) * avg_lose
 
+    # 獲利因子（PF）= 獲利總額 / 虧損總額（>1 才賺）。先前未輸出、靠下游手算，現一併納入。
+    total_win = float(win_df["profit"].sum()) if not win_df.empty else 0.0
+    total_lose = abs(float(lose_df["profit"].sum())) if not lose_df.empty else 0.0
+    profit_factor = round(total_win / total_lose, 4) if total_lose > 0 else float("inf")
+
     # 去極值（MAD）後各項指標 + 95% 信賴區間
     trim = _trim_block(win_df, lose_df, win_rate)
     win_ci = confidence_interval(win_df["profit"]) if not win_df.empty else (np.nan, np.nan)
@@ -192,6 +204,7 @@ def summarize_trades(records: pd.DataFrame) -> dict:
         "最大虧損報酬率(%)": round(float(df["profit_rate"].min()), 2),
         "平均持有天數": round(float(df["hold_days"].mean()), 2),
         "期望報酬值(EV)": round(expect_value, 2),
+        "獲利因子(PF)": profit_factor,
         "總獲利": round(float(df["profit"].sum()), 2),
     }
     ci = {

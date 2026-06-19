@@ -39,16 +39,19 @@ def _load_prices(parquet_path: str, start=None, end=None) -> pd.DataFrame:
     return df
 
 
-def run_folder(strategy, folder: str, start=None, end=None, limit: int = None) -> dict:
+def run_folder(strategy, folder: str, start=None, end=None, limit: int = None,
+               exclude=None) -> dict:
     """
     對資料夾所有 parquet 各自獨立跑同一個 strategy，彙總結果。
 
     回傳 {"per_stock": DataFrame, "aggregate": dict, "trades": DataFrame, "failed": list}。
     單檔失敗（缺欄 / 壞檔 / 區間內無資料）記進 failed、不中斷整批（不靜默吞）。
+    exclude：要跳過的 stock_id 集合（例：價格 glitch 壞資料股，見資料品質掃描）。
     """
     files = list_parquet(folder)
     if limit is not None:
         files = files[:limit]
+    exclude = set(exclude or ())
 
     per_stock_rows = []
     all_trades = []
@@ -56,6 +59,8 @@ def run_folder(strategy, folder: str, start=None, end=None, limit: int = None) -
 
     for path in files:
         stock_id = os.path.splitext(os.path.basename(path))[0]
+        if stock_id in exclude:
+            continue
         try:
             df = _load_prices(path, start, end)
             if df.empty:
