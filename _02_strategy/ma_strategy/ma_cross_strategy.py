@@ -15,7 +15,8 @@
   #6 ALIGN          多頭排列：比 long 更長的均線呈多頭排列才進（併入自原 ma_align）。❌ 不優於 baseline
   #7 VOL_BOTH       量能 BOTH（lab 冠軍量能）：當日量 > 20日均量×1.5 且 連 3 日量 ≥ 100萬股。❌ 過濾過度：量砍到1/10、EV(Trim)全轉負（長組合 +185→−86）
   #8 CHOCH          CHoCH 早期出場（ZigZag 2% 進場以來 lower-high 出場；死叉 或 CHoCH）。❌ 長組合有害：勝率升但砍趨勢利潤、EV(Trim)轉負（60/200 +195→−61）
-  #9 EXIT_BELOW_SHORT 出場加嚴：收盤由上跌破短均線也出場（除死亡交叉外，--exit-below-short）。（測試中）
+  #9 EXIT_BELOW_SHORT 出場加嚴：收盤由上跌破短均線也出場（除死亡交叉外，--exit-below-short）。❌ 全21組有害：黃金交叉後價格本就會回測短均，等於「一拉回就跑」，持有天全崩(50/200 236→42)、砍掉趨勢利潤；長均線200那5組 EV(Trim) 由正(+14~+194)全翻負(−101~−145)、去極值PF 1.0~1.15→~0.5。
+  #10 DIVERGE        夾角擴大進場（短均N日%斜率>長均%斜率）/ 收斂或死叉出場（--diverge [--diverge-margin X] [--slope-win N]）。❌ 同 #9：收斂出場太敏感、趨勢途中斜率波動就出場，持有天 236→42~53、交易×2.8、長均200那3組 EV(Trim) +93~+194 全翻負(−96~−115)。問題在「出場」不在進場。
 
 執行（全市場、掃資料夾、彙總；輸出 result/ma_cross/<variant>/，格式同 single_ma）：
   python _02_strategy/ma_strategy/ma_cross_strategy.py <資料夾> --short 50 --long 200 [--confirm] [--angle3]
@@ -69,12 +70,19 @@ class MACrossStrategy(VbtSingleStrategy):
     VOL_BOTH = False        # 量能 BOTH（lab 冠軍）：當日量 > 20日均量×1.5 且 連 3 日量 ≥ 100萬股
     CHOCH = False           # CHoCH 早期出場（ZigZag 2% lower-high 出場；路徑相依、覆寫 build_signals）
     EXIT_BELOW_SHORT = False  # #9 出場：收盤由上跌破短均線也出場（除死亡交叉外）
+    DIVERGE = False           # #10 夾角擴大進場 / 收斂或死叉出場（短均%斜率 vs 長均%斜率）
+    DIVERGE_MARGIN = 0.0      # #10 進場門檻：短均N日%斜率 − 長均N日%斜率 須 > 此值（0=只要短均爬得快）
+    SLOPE_WIN = 5             # #10 斜率視窗：以 MA 的 N 日 %變化當斜率（scale-invariant）
+    DIVERGE_EXIT = True       # #10 DIVERGE 時是否加「收斂出場」（False=只用死叉出場，純測進場品質）
 
     def add_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """短/長均線引用 _01_data 指標(sma)；ADX/量能均線/強K/zigzag 無對應 indicators 故依需求補。"""
         df["ma_short"] = _ma(df, self.SHORT_MA)
         df["ma_long"] = _ma(df, self.LONG_MA)
         df["ratio"] = df["ma_short"] / df["ma_long"]          # 夾角代理（>1 表短在長之上）
+        w = self.SLOPE_WIN                                    # #10 各均線「N 日 %斜率」（scale-invariant）
+        df["sl_short"] = df["ma_short"] / df["ma_short"].shift(w) - 1
+        df["sl_long"] = df["ma_long"] / df["ma_long"].shift(w) - 1
         df["vol_ma5"] = df["volume"].rolling(5).mean()
         df["vol_ma20"] = df["volume"].rolling(20).mean()      # 量能 BOTH 相對放量基準
         # 強 K：長紅(開→收≥5%) 或 跳空開在長均之上
@@ -109,7 +117,10 @@ class MACrossStrategy(VbtSingleStrategy):
     def buy_signal(self, df: pd.DataFrame) -> pd.Series:
         """進場「判定日」：依旗標組合。基底延到隔日開盤成交。"""
         above = df["ma_short"] > df["ma_long"]
-        if self.ANGLE_DAYS and self.ANGLE_DAYS > 0:
+        if self.DIVERGE:
+            div = above & (df["sl_short"] > df["sl_long"] + self.DIVERGE_MARGIN)  # #10 夾角擴大：短均%斜率 > 長均%斜率
+            sig = div & ~div.shift(1, fill_value=False)
+        elif self.ANGLE_DAYS and self.ANGLE_DAYS > 0:
             # 嚴格：短在長之上 且 夾角(ratio) 連 N 日遞增（N 個遞增步）
             r = df["ratio"]
             sig = above.copy()
@@ -143,6 +154,9 @@ class MACrossStrategy(VbtSingleStrategy):
         if self.EXIT_BELOW_SHORT:
             pb = df["close"] < df["ma_short"]
             sig = sig | (pb & ~pb.shift(1, fill_value=False))  # 收盤由上跌破短均線
+        if self.DIVERGE and self.DIVERGE_EXIT:
+            conv = df["sl_short"] <= df["sl_long"]             # #10 夾角收斂：短均不再爬得比長均快
+            sig = sig | (conv & ~conv.shift(1, fill_value=False))
         return sig.fillna(False).astype(bool)
 
     def build_signals(self, df: pd.DataFrame):
@@ -198,8 +212,12 @@ def main(argv) -> int:
     parser.add_argument("--min-vol-zhang", type=int, default=0, help="5日均量>N張(=N*1000股)")
     parser.add_argument("--align", action="store_true", help="多頭排列:比long更長的均線多頭排列才進(併入自ma_align)")
     parser.add_argument("--vol-both", action="store_true", help="量能BOTH:當日量>20日均量×1.5 且 連3日≥100萬股(lab冠軍量能)")
-    parser.add_argument("--choch", action="store_true", help="CHoCH早期出場:ZigZag2% lower-high 出場(路徑相依)")
+    parser.add_argument("--choch", action="store_true", help="CHoCH早期出場:ZigZag2%% lower-high 出場(路徑相依)")
     parser.add_argument("--exit-below-short", action="store_true", help="#9 出場:收盤由上跌破短均線也出場")
+    parser.add_argument("--diverge", action="store_true", help="#10 夾角擴大進場/收斂或死叉出場")
+    parser.add_argument("--diverge-margin", type=float, default=0.0, help="#10 進場門檻:短均N日%%斜率-長均N日%%斜率 > 此值")
+    parser.add_argument("--slope-win", type=int, default=5, help="#10 斜率視窗(MA N日%%變化)")
+    parser.add_argument("--diverge-entry-only", action="store_true", help="#10 只用夾角擴大進場+死叉出場(拿掉收斂出場)")
     parser.add_argument("--trades", action="store_true")
     parser.add_argument("--start", default=DEFAULT_START)
     parser.add_argument("--end", default=DEFAULT_END)
@@ -221,6 +239,10 @@ def main(argv) -> int:
     strat.VOL_BOTH = args.vol_both
     strat.CHOCH = args.choch
     strat.EXIT_BELOW_SHORT = args.exit_below_short
+    strat.DIVERGE = args.diverge
+    strat.DIVERGE_MARGIN = args.diverge_margin
+    strat.SLOPE_WIN = args.slope_win
+    strat.DIVERGE_EXIT = not args.diverge_entry_only
 
     result = batch.run_folder(strat, args.folder,
                               start=args.start, end=args.end, limit=args.limit,
