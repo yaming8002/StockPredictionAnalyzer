@@ -16,7 +16,8 @@
   #7 VOL_BOTH       量能 BOTH（lab 冠軍量能）：當日量 > 20日均量×1.5 且 連 3 日量 ≥ 100萬股。❌ 過濾過度：量砍到1/10、EV(Trim)全轉負（長組合 +185→−86）
   #8 CHOCH          CHoCH 早期出場（ZigZag 2% 進場以來 lower-high 出場；死叉 或 CHoCH）。❌ 長組合有害：勝率升但砍趨勢利潤、EV(Trim)轉負（60/200 +195→−61）
   #9 EXIT_BELOW_SHORT 出場加嚴：收盤由上跌破短均線也出場（除死亡交叉外，--exit-below-short）。❌ 全21組有害：黃金交叉後價格本就會回測短均，等於「一拉回就跑」，持有天全崩(50/200 236→42)、砍掉趨勢利潤；長均線200那5組 EV(Trim) 由正(+14~+194)全翻負(−101~−145)、去極值PF 1.0~1.15→~0.5。
-  #10 DIVERGE        夾角擴大進場（短均N日%斜率>長均%斜率）/ 收斂或死叉出場（--diverge [--diverge-margin X] [--slope-win N]）。❌ 同 #9：收斂出場太敏感、趨勢途中斜率波動就出場，持有天 236→42~53、交易×2.8、長均200那3組 EV(Trim) +93~+194 全翻負(−96~−115)。問題在「出場」不在進場。
+  #10 DIVERGE        夾角擴大進場（短均N日%斜率>長均%斜率）/ 收斂或死叉出場（--diverge [--diverge-margin X] [--slope-win N]）。❌ 同 #9：收斂出場太敏感、趨勢途中斜率波動就出場，持有天 236→42~53、交易×2.8、長均200那3組 EV(Trim) +93~+194 全翻負(−96~−115)。問題在「出場」不在進場。純進場版（--diverge-entry-only，只夾角擴大進場+死叉出場）= ○ 微幅：幾乎同 baseline（交叉當下短均本就比長均爬得快，「夾角擴大」與交叉高度重疊），長組合 EV(Trim) +184→+194/+194→+201/+93→+105、去極PF +0.01~0.03，屬 #4 那類微調、非 #5 強K 等級。
+  #11 ANGLE_DEG      黃金交叉夾角(短均-長均度數)>N度才進（--angle-deg N；每日%斜率當正切）。〔測試中〕
 
 執行（全市場、掃資料夾、彙總；輸出 result/ma_cross/<variant>/，格式同 single_ma）：
   python _02_strategy/ma_strategy/ma_cross_strategy.py <資料夾> --short 50 --long 200 [--confirm] [--angle3]
@@ -74,6 +75,7 @@ class MACrossStrategy(VbtSingleStrategy):
     DIVERGE_MARGIN = 0.0      # #10 進場門檻：短均N日%斜率 − 長均N日%斜率 須 > 此值（0=只要短均爬得快）
     SLOPE_WIN = 5             # #10 斜率視窗：以 MA 的 N 日 %變化當斜率（scale-invariant）
     DIVERGE_EXIT = True       # #10 DIVERGE 時是否加「收斂出場」（False=只用死叉出場，純測進場品質）
+    ANGLE_DEG = 0.0           # #11 黃金交叉「夾角(短均-長均)度數 > 此值」才進（filter，疊在交叉上；每日%斜率當正切）
 
     def add_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """短/長均線引用 _01_data 指標(sma)；ADX/量能均線/強K/zigzag 無對應 indicators 故依需求補。"""
@@ -83,6 +85,10 @@ class MACrossStrategy(VbtSingleStrategy):
         w = self.SLOPE_WIN                                    # #10 各均線「N 日 %斜率」（scale-invariant）
         df["sl_short"] = df["ma_short"] / df["ma_short"].shift(w) - 1
         df["sl_long"] = df["ma_long"] / df["ma_long"].shift(w) - 1
+        # #10b 夾角度數：每日%斜率(百分點)當正切 → arctan 換度數；夾角 = 短均角度 − 長均角度（長均≈平→夾角≈短均角度）
+        df["angle_short"] = np.degrees(np.arctan(df["sl_short"] / w * 100))
+        df["angle_long"] = np.degrees(np.arctan(df["sl_long"] / w * 100))
+        df["angle_gap"] = df["angle_short"] - df["angle_long"]
         df["vol_ma5"] = df["volume"].rolling(5).mean()
         df["vol_ma20"] = df["volume"].rolling(20).mean()      # 量能 BOTH 相對放量基準
         # 強 K：長紅(開→收≥5%) 或 跳空開在長均之上
@@ -136,6 +142,8 @@ class MACrossStrategy(VbtSingleStrategy):
             sig = sig & (df["adx"].shift(1) < self.VOL_ADX)
         if self.STRONGK:
             sig = sig & (df["long_red"] | df["gap_over_long"])
+        if self.ANGLE_DEG and self.ANGLE_DEG > 0:
+            sig = sig & (df["angle_gap"] > self.ANGLE_DEG)   # #11 夾角(短均-長均)度數 > 門檻才進
         if self.MIN_VOL_ZHANG and self.MIN_VOL_ZHANG > 0:
             sig = sig & (df["vol_ma5"] > self.MIN_VOL_ZHANG * 1000)
         if self.ALIGN:
@@ -218,6 +226,7 @@ def main(argv) -> int:
     parser.add_argument("--diverge-margin", type=float, default=0.0, help="#10 進場門檻:短均N日%%斜率-長均N日%%斜率 > 此值")
     parser.add_argument("--slope-win", type=int, default=5, help="#10 斜率視窗(MA N日%%變化)")
     parser.add_argument("--diverge-entry-only", action="store_true", help="#10 只用夾角擴大進場+死叉出場(拿掉收斂出場)")
+    parser.add_argument("--angle-deg", type=float, default=0.0, help="#11 黃金交叉夾角(短均-長均)度數 > 此值才進(每日%%斜率當正切)")
     parser.add_argument("--trades", action="store_true")
     parser.add_argument("--start", default=DEFAULT_START)
     parser.add_argument("--end", default=DEFAULT_END)
@@ -243,6 +252,7 @@ def main(argv) -> int:
     strat.DIVERGE_MARGIN = args.diverge_margin
     strat.SLOPE_WIN = args.slope_win
     strat.DIVERGE_EXIT = not args.diverge_entry_only
+    strat.ANGLE_DEG = args.angle_deg
 
     result = batch.run_folder(strat, args.folder,
                               start=args.start, end=args.end, limit=args.limit,
