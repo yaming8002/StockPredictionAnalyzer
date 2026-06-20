@@ -15,6 +15,7 @@
   #6 ALIGN          多頭排列：比 long 更長的均線呈多頭排列才進（併入自原 ma_align）。❌ 不優於 baseline
   #7 VOL_BOTH       量能 BOTH（lab 冠軍量能）：當日量 > 20日均量×1.5 且 連 3 日量 ≥ 100萬股。❌ 過濾過度：量砍到1/10、EV(Trim)全轉負（長組合 +185→−86）
   #8 CHOCH          CHoCH 早期出場（ZigZag 2% 進場以來 lower-high 出場；死叉 或 CHoCH）。❌ 長組合有害：勝率升但砍趨勢利潤、EV(Trim)轉負（60/200 +195→−61）
+  #9 EXIT_BELOW_SHORT 出場加嚴：收盤由上跌破短均線也出場（除死亡交叉外，--exit-below-short）。（測試中）
 
 執行（全市場、掃資料夾、彙總；輸出 result/ma_cross/<variant>/，格式同 single_ma）：
   python _02_strategy/ma_strategy/ma_cross_strategy.py <資料夾> --short 50 --long 200 [--confirm] [--angle3]
@@ -41,6 +42,8 @@ RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "result")
 DEFAULT_START = "2001-01-01"
 DEFAULT_END = "2025-12-31"
 ALL_MAS = (5, 10, 20, 50, 60, 120, 200)   # 多頭排列判斷用的標準均線集合（ALIGN 旗標）
+# 價格 glitch 壞資料股（近零價/天價，見 docs data-quality 掃描）；全市場回測一律排除、與 reference 同口徑
+GLITCH = {"3591.TW", "8039.TW", "8027.TWO", "6283.TW", "3666.TWO"}
 
 
 def _ma(df: pd.DataFrame, window: int) -> pd.Series:
@@ -65,6 +68,7 @@ class MACrossStrategy(VbtSingleStrategy):
     ALIGN = False           # 多頭排列：比 long 更長的均線呈多頭排列才進（併入自 ma_align 多頭排列突破）
     VOL_BOTH = False        # 量能 BOTH（lab 冠軍）：當日量 > 20日均量×1.5 且 連 3 日量 ≥ 100萬股
     CHOCH = False           # CHoCH 早期出場（ZigZag 2% lower-high 出場；路徑相依、覆寫 build_signals）
+    EXIT_BELOW_SHORT = False  # #9 出場：收盤由上跌破短均線也出場（除死亡交叉外）
 
     def add_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """短/長均線引用 _01_data 指標(sma)；ADX/量能均線/強K/zigzag 無對應 indicators 故依需求補。"""
@@ -133,9 +137,13 @@ class MACrossStrategy(VbtSingleStrategy):
         return sig.fillna(False).astype(bool)
 
     def sell_signal(self, df: pd.DataFrame) -> pd.Series:
-        """出場「判定日」：short 下穿 long（死亡交叉）。基底延到隔日開盤成交。"""
+        """出場「判定日」：short 下穿 long（死亡交叉）；#9 開啟時，收盤由上跌破短均線也算出場。基底延到隔日開盤成交。"""
         below = df["ma_short"] < df["ma_long"]
-        return below & ~below.shift(1, fill_value=False)
+        sig = below & ~below.shift(1, fill_value=False)        # 死亡交叉
+        if self.EXIT_BELOW_SHORT:
+            pb = df["close"] < df["ma_short"]
+            sig = sig | (pb & ~pb.shift(1, fill_value=False))  # 收盤由上跌破短均線
+        return sig.fillna(False).astype(bool)
 
     def build_signals(self, df: pd.DataFrame):
         """
@@ -191,6 +199,7 @@ def main(argv) -> int:
     parser.add_argument("--align", action="store_true", help="多頭排列:比long更長的均線多頭排列才進(併入自ma_align)")
     parser.add_argument("--vol-both", action="store_true", help="量能BOTH:當日量>20日均量×1.5 且 連3日≥100萬股(lab冠軍量能)")
     parser.add_argument("--choch", action="store_true", help="CHoCH早期出場:ZigZag2% lower-high 出場(路徑相依)")
+    parser.add_argument("--exit-below-short", action="store_true", help="#9 出場:收盤由上跌破短均線也出場")
     parser.add_argument("--trades", action="store_true")
     parser.add_argument("--start", default=DEFAULT_START)
     parser.add_argument("--end", default=DEFAULT_END)
@@ -211,9 +220,11 @@ def main(argv) -> int:
     strat.ALIGN = args.align
     strat.VOL_BOTH = args.vol_both
     strat.CHOCH = args.choch
+    strat.EXIT_BELOW_SHORT = args.exit_below_short
 
     result = batch.run_folder(strat, args.folder,
-                              start=args.start, end=args.end, limit=args.limit)
+                              start=args.start, end=args.end, limit=args.limit,
+                              exclude=GLITCH)
     out_dir = os.path.join(RESULT_DIR, "ma_cross", args.variant)
     label = f"ma_cross_{args.short}_{args.long}"
     written = batch.write_results(result, out_dir, label, write_trades=args.trades)
