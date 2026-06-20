@@ -11,6 +11,50 @@ vbt 回測輸出的數據分析（整併版）
 """
 import numpy as np
 import pandas as pd
+from numba import njit
+
+
+@njit(cache=True)
+def _mc_core(pnl, n_sims, init_cash, ruin_level, seed):
+    """
+    逐路徑 bootstrap（省記憶體，不建 n_sims×n 大矩陣）。
+    每路徑抽樣 n 筆損益累加成權益，量：最終資金、最大連敗、最大回撤、是否破產。
+    """
+    np.random.seed(seed)
+    n = len(pnl)
+    finals = np.empty(n_sims)
+    streaks = np.empty(n_sims)        # 每路徑最大連續虧損次數
+    max_dds = np.empty(n_sims)        # 每路徑最大回撤（比例）
+    ruin = 0
+    for s in range(n_sims):
+        equity = init_cash
+        peak = init_cash
+        mdd = 0.0
+        cur = 0
+        mx = 0
+        hit = False
+        for _ in range(n):
+            x = pnl[np.random.randint(0, n)]
+            if x < 0.0:
+                cur += 1
+                if cur > mx:
+                    mx = cur
+            else:
+                cur = 0
+            equity += x
+            if equity > peak:
+                peak = equity
+            dd = (peak - equity) / peak
+            if dd > mdd:
+                mdd = dd
+            if equity < ruin_level:
+                hit = True
+        finals[s] = equity
+        streaks[s] = mx
+        max_dds[s] = mdd
+        if hit:
+            ruin += 1
+    return finals, streaks, max_dds, ruin
 
 
 def hold_days_stats(trades: pd.DataFrame) -> dict:
@@ -50,21 +94,19 @@ def yearly_performance(trades: pd.DataFrame) -> pd.DataFrame:
 
 
 def monte_carlo(trades: pd.DataFrame, initial_cash: float = 100_000,
-                n_sims: int = 10_000, ruin_ratio: float = 0.5, seed: int = None) -> dict:
+                n_sims: int = 10_000, ruin_ratio: float = 0.5, seed: int = 42) -> dict:
     """
     對每筆 real_pnl 做 bootstrap 蒙地卡羅：每次模擬抽樣 len(trades) 筆損益累加成權益曲線。
-    回傳最終資金分位數，與「過程權益跌破 initial_cash×ruin_ratio」的破產機率。
+    逐路徑迴圈（numba，省記憶體；舊版 n_sims×n 大矩陣在大 N 會 OOM）。
+    回傳：最終資金分位、破產機率、**最大連敗 S 分布**、**最大回撤分布**。
     """
     pnl = trades["real_pnl"].to_numpy(dtype=np.float64)
     n = len(pnl)
     if n == 0:
         return {"交易次數": 0}
-    rng = np.random.default_rng(seed)
     ruin_level = initial_cash * ruin_ratio
-    draws = rng.choice(pnl, size=(n_sims, n), replace=True)
-    equity = initial_cash + np.cumsum(draws, axis=1)
-    finals = equity[:, -1]
-    ruin_prob = float((equity.min(axis=1) < ruin_level).mean())
+    finals, streaks, max_dds, ruin = _mc_core(pnl, n_sims, float(initial_cash),
+                                              float(ruin_level), int(seed))
     return {
         "模擬次數": n_sims,
         "每次抽樣筆數": n,
@@ -72,7 +114,16 @@ def monte_carlo(trades: pd.DataFrame, initial_cash: float = 100_000,
         "最終資金_平均": round(float(finals.mean()), 0),
         "最終資金_P5": round(float(np.percentile(finals, 5)), 0),
         "最終資金_P95": round(float(np.percentile(finals, 95)), 0),
-        f"破產機率(<{ruin_ratio:.0%})": round(ruin_prob * 100, 2),
+        f"破產機率(<{ruin_ratio:.0%})": round(ruin * 100.0 / n_sims, 2),
+        # 最大連敗 S（餵資金管理框架）
+        "最大連敗_中位": int(np.median(streaks)),
+        "最大連敗_P95": int(np.percentile(streaks, 95)),
+        "最大連敗_P99": int(np.percentile(streaks, 99)),
+        "最大連敗_極值": int(streaks.max()),
+        # 最大回撤（bootstrap 路徑）
+        "最大回撤%_中位": round(float(np.median(max_dds)) * 100, 1),
+        "最大回撤%_P95": round(float(np.percentile(max_dds, 95)) * 100, 1),
+        "最大回撤%_極值": round(float(max_dds.max()) * 100, 1),
     }
 
 
