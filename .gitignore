@@ -2,5 +2,9 @@
 strategy_log/
 result/
 
+# 各策略實際回測結果 / 個人操作紀錄，不公開
+# （教學只追蹤 docs/strategy_condition_reference.md，回測明細不進公開 repo）
+docs/reference/
+
 # Python 快取
 __pycache__/
