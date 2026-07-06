@@ -46,9 +46,8 @@ import pandas as pd
 from _01_data.indicators_momentum_volume import calculate_kd
 from _02_strategy.base.vbt import batch
 from _02_strategy.base.vbt.single import VbtSingleStrategy
-# 價格 glitch 壞資料股（近零價/天價）排除集，沿用 ma_cross 的單一定義（不另立第二份）；
-# 只排那 5 檔確定非物理價的，增資/縮表等合法公司行為造成的大跳不在此列、不誤殺。
-from _02_strategy.ma_strategy.ma_cross_strategy import GLITCH
+# 資料品質排除集 GLITCH 與標準回測區間 DEFAULT_START/END：跨策略共用，統一由 base/vbt/common 取用（單一定義）。
+from _02_strategy.base.vbt.common import GLITCH, DEFAULT_START, DEFAULT_END
 
 
 # 回測結果輸出目錄（策略同目錄底下 ./result，已於 .gitignore 排除）
@@ -70,11 +69,6 @@ OVERBOUGHT = 80
 # （註：>300 張門檻已作廢——對高價低量股不公平，不再使用。）
 VOL_LOT_MIN = 1_000_000    # #2a：1000 張 = 100 萬股
 TURNOVER_MIN = 30_000_000  # #2b：成交金額 3,000 萬
-
-# 標準回測區間：後續測試一律以此為主（掐掉 2000 殘月與 2026 未滿年，資料較穩定）；可用 --start/--end 覆蓋
-DEFAULT_START = "2001-01-01"
-DEFAULT_END = "2025-12-31"
-
 
 class SingleKDStrategy(VbtSingleStrategy):
     """

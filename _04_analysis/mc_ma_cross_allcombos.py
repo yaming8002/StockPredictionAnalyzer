@@ -17,7 +17,8 @@ if _root not in sys.path:
 
 import pandas as pd
 
-from _03_multi_strategy.ma_cross.multi_ma_cross import MultiMACross, GLITCH
+from _03_multi_strategy.ma_cross.multi_ma_cross import MultiMACross
+from _02_strategy.base.vbt.common import GLITCH   # 跨策略共用的資料品質排除集（單一定義）
 from _04_analysis.analyze_vbt import monte_carlo
 
 DATA = r"F:\stock-analyzer\data\stock_data"

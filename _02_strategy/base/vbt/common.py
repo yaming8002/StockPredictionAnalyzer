@@ -2,7 +2,8 @@
 vbt 策略套件 common — 各策略共用的低階工具
 ================================================
 
-只放「與引擎無關」的純函式：台股 tick 進位、精確費用重建、欄位驗證、summary 組裝。
+只放「與引擎無關」的純函式與跨策略共用常數：台股費率 / tick 進位、精確費用重建、
+欄位驗證、summary 組裝，以及標準回測區間、資料品質排除集（GLITCH）等全策略共用口徑。
 策略基底（single）以「呼叫這些函式」共用，不靠類別繼承。
 """
 import numpy as np
@@ -16,6 +17,16 @@ MIN_COMMISSION = 20.0      # 單筆最低手續費
 
 # 統一小寫欄位（與資料層約定一致）
 OHLCV = ("open", "high", "low", "close", "volume")
+
+# 標準回測區間：後續測試一律以此為主（掐掉 2000 殘月與 2026 未滿年，資料較穩定）；策略檔可用 --start/--end 覆蓋。
+# 全策略共用單一定義，勿在各策略檔另立第二份。
+DEFAULT_START = "2001-01-01"
+DEFAULT_END = "2025-12-31"
+
+# 價格 glitch 壞資料股（近零價/天價，見 docs data-quality 掃描）排除集：跨策略共用的資料品質口徑，
+# 全市場回測一律事前剔除、與 reference 同口徑。只排那 5 檔確定非物理價的；增資/縮表等合法公司行為
+# 造成的大跳不在此列、不誤殺。各策略檔一律 import 此單一定義，勿另立第二份。
+GLITCH = {"3591.TW", "8039.TW", "8027.TWO", "6283.TW", "3666.TWO"}
 
 
 def tw_tick_arr(prices) -> np.ndarray:
@@ -138,7 +149,8 @@ def _trim_block(win_df: pd.DataFrame, lose_df: pd.DataFrame, win_rate: float) ->
 def _empty_summary() -> dict:
     """無交易時的零值 summary（欄位與正常情況一致，供下游對齊）。"""
     keys = ["交易次數", "勝率(%)", "平均獲利金額", "平均虧損金額",
-            "平均獲利報酬率(%)", "平均虧損報酬率(%)", "最大獲利", "最大虧損",
+            "平均獲利報酬率(%)", "平均虧損報酬率(%)", "中位數報酬率(%)",
+            "最大獲利", "最大虧損",
             "最大獲利報酬率(%)", "最大虧損報酬率(%)", "平均持有天數",
             "期望報酬值(EV)", "獲利因子(PF)", "總獲利", "IQR獲利下限", "IQR獲利上限",
             "IQR虧損下限", "IQR虧損上限", "排除極值後平均獲利金額",
@@ -198,6 +210,9 @@ def summarize_trades(records: pd.DataFrame) -> dict:
         "平均虧損金額": round(avg_lose, 2),
         "平均獲利報酬率(%)": round(avg_win_rate, 2),
         "平均虧損報酬率(%)": round(avg_lose_rate, 2),
+        # 中位數報酬率：所有交易毛報酬率的中位數（典型的一筆長怎樣）。平均被少數右尾大單抬高，
+        # 中位數才看得出「一半以上的交易其實在小賠」——量化獲利對肥尾的依賴。
+        "中位數報酬率(%)": round(float(df["profit_rate"].median()), 2),
         "最大獲利": round(float(df["profit"].max()), 2),
         "最大虧損": round(float(df["profit"].min()), 2),
         "最大獲利報酬率(%)": round(float(df["profit_rate"].max()), 2),

@@ -158,7 +158,7 @@ class VbtMultiStrategy:
         """
         #4 multi 專屬：買入優先分數（分數高者現金不足時優先成交）。
         預設回 None → 改用 stock_id 欄序（賣先買後，買單 id 小者優先）。
-        覆寫範例：return df["xgb_prob"]（機率高者優先）。
+        覆寫範例：return df["cmf_20"]（分數高者優先，如資金流指標較強者先成交）。
         """
         return None
 
