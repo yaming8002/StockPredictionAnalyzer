@@ -2,7 +2,7 @@
 單一均線突破策略（single MA breakout）— ma_strategy 套件下的方案
 
 繼承 VbtSingleStrategy，只記錄「判定日」買賣條件（隔日開盤成交、費稅、tick 由基底處理）：
-  進場：突破單一 MA。**目前啟用 = opt11（最優）= 優化 #7（強 K 突破）+ 優化 #10（突破前 ADX<20 盤整）**。
+  進場：突破單一 MA。**目前啟用 = opt13（突破後回測支撐反轉）；歷來最優 = opt11（#7 強 K 突破 + #10 突破前 ADX<20）**。
         其餘優化以註解保留可重啟；把進場優化全註解掉 → 回 baseline（突破當日判定）。
   出場：收盤「下穿」單一 MA（跌破）。
   成交：判定日的「隔日開盤」（基底統一，有訊號一律隔日成交、不在訊號當日收盤）。
@@ -24,6 +24,10 @@
   #10 盤整後 ADX     → 207 / 1.69（<25）、249 / 1.85（<20）  ○ 順動能補位
   #11 #7+#10(ADX<20) → 438 / 2.23   ✅✅ 全測試最佳【採用＝目前啟用】
   #12 #11+流動性門檻 → 87 / 1.23（>1000張）、136 / 1.36（>300張）
+  #13 突破後回測支撐反轉 → 自成一格進場(近 n 根突破→觸碰根低點貼 MA±2%→反轉根陽線、實體>觸碰根、收盤站回 MA，隔日買)。
+       無門檻：全 MA 輸 baseline(EV 僅 1/4~1/5)；加「5日均量>100萬股」後翻轉——可成交宇宙每筆 EV 在 MA≥50 勝 baseline
+       (MA200 高 79%)，但 baseline 靠筆數多、總獲利多數仍小勝。短均線(5/10/20)兩者皆負/貼0。
+       全表詳見 docs/reference/single_ma/2026-06-23_opt13_pullback_reversal.md【目前啟用】
   （另：多頭排列突破已併入 ma_cross_strategy.py 的 ALIGN 旗標，測試 ❌ 不優於 baseline）
 
 ⚠️ 重大但書（流動性體檢）：#11 賣出日成交量中位僅 ~210 張、約 30% < 50 張（賣不掉）。加可成交
@@ -55,6 +59,8 @@ from _01_data.indicators_momentum_volume import calculate_cmf
 from _01_data.indicators_volatility import calculate_atr_pct
 from _02_strategy.base.vbt import batch
 from _02_strategy.base.vbt.single import VbtSingleStrategy
+# 資料品質排除集 GLITCH 與標準回測區間 DEFAULT_START/END：跨策略共用，統一由 base/vbt/common 取用（單一定義）。
+from _02_strategy.base.vbt.common import GLITCH, DEFAULT_START, DEFAULT_END
 
 
 def _ma(df: pd.DataFrame, window: int) -> pd.Series:
@@ -86,10 +92,6 @@ RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "result")
 
 # 偵測不到資料欄位時的預設 MA 期數
 DEFAULT_PERIODS = (5, 10, 20, 50, 60, 120, 200)
-
-# 標準回測區間：後續測試一律以此為主（掐掉 2000 殘月與 2026 未滿年，資料較穩定）；可用 --start/--end 覆蓋
-DEFAULT_START = "2001-01-01"
-DEFAULT_END = "2025-12-31"
 
 
 class SingleMAStrategy(VbtSingleStrategy):
@@ -137,6 +139,13 @@ class SingleMAStrategy(VbtSingleStrategy):
         minus_di = 100 * minus_dm.ewm(alpha=1 / p, adjust=False).mean() / atr_w
         dx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di)).fillna(0.0)
         df["adx"] = dx.ewm(alpha=1 / p, adjust=False).mean()
+        # opt13：突破後回測支撐反轉（pullback-to-MA reversal）所需欄位
+        #   突破事件 = close 由下而上穿越 MA；had_breakout = 近 n 根內曾突破過（多頭脈絡前提）
+        cross_up = (df["close"] > df["ma"]) & (df["close"].shift(1) <= df["ma"].shift(1))
+        df["had_breakout"] = cross_up.rolling(n).sum() >= 1
+        df["body"] = (df["close"] - df["open"]).abs()                          # K 線實體大小
+        # 觸碰根：最低點落在 MA ±2%（回落到均線附近，上下各 2%）
+        df["low_near_ma"] = (df["low"] >= df["ma"] * 0.98) & (df["low"] <= df["ma"] * 1.02)
         return df
 
     def buy_signal(self, df: pd.DataFrame) -> pd.Series:
@@ -144,19 +153,25 @@ class SingleMAStrategy(VbtSingleStrategy):
         進場「判定日」訊號（基底會自動延到隔日開盤成交）。
 
         baseline：當日收盤上穿 MA（突破當天判定）。
-        優化 #1（雙日確認）：突破隔日收盤仍站上 MA 才判定（多等一天，過濾一日假突破）。
-        優化 #2（量能濾網，測試後不採用、預設註解）：取消註解＝只留流動性門檻 5 日均量 > 100 萬股。
-        優化 #3（CMF 資金流向，測試後不採用、預設註解）：取消註解＝20 日 CMF > 0.1。
-        優化 #5（正統反轉突破，目前測試中、預設啟用）：突破 + 突破前整理 + 帶量。
-            整理 = 突破前 N(=MA 期數) 日內，累計 min(ceil(N/2),10) 日「波動(ATR%,窗口隨 MA 放大)收斂
-                  且 收盤在 MA 下方」；帶量 = 突破當日 volume > N 日均量。（opt5 啟用時 opt1 暫關）
+        目前啟用 = 優化 #13（突破後回測支撐反轉，見下方 3 行）：近 n 根曾突破 MA → 觸碰根低點
+            貼 MA±2% → 反轉根為陽線、實體大於觸碰根、收盤站回 MA。自成一格進場、不疊在突破當日上，
+            故啟用時 #7/#10 一併關閉。
+        歷來最優 = opt11 = #7（強 K 突破）+ #10（突破前 ADX<20）；還原此兩行、關 #13 即回 opt11。
+        其餘（#1 雙日確認、#2 量能、#3 CMF、#5 整理+帶量、#6 MA 下方+帶量、#9 回檔）皆測試後
+            不採用、以註解保留可重啟；全部進場優化註解掉 = baseline。
 
-        ▶ 切換：每個「# 優化 #N」獨立一行，可各自註解／取消註解疊加；全註解 = baseline。
+        ▶ 切換：每個「# 優化 #N」獨立一行，可各自註解／取消註解；詳細取捨見檔頭「優化紀錄」。
         """
         above = df["close"] > df["ma"]
         signal = above & ~above.shift(1, fill_value=False)   # baseline：突破當日（上穿 MA）
-        signal = signal & (df["long_red"] | df["gap_over_ma"])  # 優化 #7：突破那根 K 線需 長紅(開→收>=5%) 或 跳空過均線
-        signal = signal & (df["adx"].shift(1) < 20)  # 優化 #10：突破前一根 K 的 ADX(14) < 20（盤整/弱趨勢後突破）。與 #7 同開＝opt11 組合
+        # signal = signal & (df["long_red"] | df["gap_over_ma"])  # 優化 #7：突破那根 K 線需 長紅(開→收>=5%) 或 跳空過均線（opt13 啟用時關）
+        # signal = signal & (df["adx"].shift(1) < 20)  # 優化 #10：突破前一根 K 的 ADX(14) < 20（盤整/弱趨勢後突破）。與 #7 同開＝opt11 組合（opt13 啟用時關）
+        # 優化 #13（突破後回測支撐反轉，目前啟用）：自成一格進場——重新定義 signal，不疊在突破當日上。
+        #   近 n 根內曾突破 MA(多頭脈絡) → 觸碰根 A=B-1 最低點落在 MA±2% → 反轉根 B 為陽線、實體大於觸碰根、收盤站回 MA。
+        #   判定日 = 反轉根 B，基底隔日(B+1)開盤成交。停用 #13 = 註解這 3 行並還原 #7/#10 = 回 opt11。
+        breakout_ctx = df["had_breakout"].shift(1)                                   # 截至觸碰根 A，近 n 根內曾突破
+        touch = df["low_near_ma"].shift(1)                                           # 觸碰根 A=B-1 最低點貼 MA±2%
+        signal = breakout_ctx & touch & (df["close"] > df["open"]) & (df["body"] > df["body"].shift(1)) & (df["close"] > df["ma"])  # 優化 #13
         # signal = signal & (df["vol_ma5"] > 300_000)  # 優化 #12：5 日均量 > 30 萬股(=300張) 流動性門檻（測試用，暫關回 opt11）
         # signal = above & signal.shift(1, fill_value=False)   # 優化 #1：雙日確認（疊 opt7 後反不如 opt7 單獨，預設關。取消註解＝強突破隔日仍站上才買 = opt8）
         # signal = signal.shift(1, fill_value=False) & (df["open"] > df["close"]) & above   # 優化 #9：opt7 隔天收黑但沒跌破 MA → 再隔一天買（測試後不採用，預設關）
@@ -216,9 +231,9 @@ def main(argv) -> int:
     parser = argparse.ArgumentParser(description="單一均線突破：資料夾批次回測")
     parser.add_argument("folder", help="OHLCV parquet 資料夾路徑")
     parser.add_argument("--ma", type=int, default=20, help="單一 MA 期數（預設 20）")
-    parser.add_argument("--variant", choices=("baseline", "opt1", "opt2", "opt2b", "opt3", "opt4", "opt5", "opt6", "opt7", "opt8", "opt9", "opt10", "opt10b", "opt11", "opt12", "opt12b"), default="opt1",
+    parser.add_argument("--variant", choices=("baseline", "opt1", "opt2", "opt2b", "opt3", "opt4", "opt5", "opt6", "opt7", "opt8", "opt9", "opt10", "opt10b", "opt11", "opt12", "opt12b", "opt13"), default="opt1",
                         help="輸出資料夾分流（result/single_ma/<variant>/）；行為切換靠 buy_signal "
-                             "內『# 優化 #1』那行的註解，--variant 只決定寫去哪，兩者請保持一致")
+                             "內對應的『# 優化 #N』那行的註解，--variant 只決定寫去哪，兩者請保持一致")
     parser.add_argument("--trades", action="store_true",
                         help="另存逐筆交易紀錄（預設不存，只出彙總）")
     parser.add_argument("--start", default=DEFAULT_START,
@@ -232,9 +247,10 @@ def main(argv) -> int:
     strat.MA_PERIOD = args.ma
 
     result = batch.run_folder(strat, args.folder,
-                              start=args.start, end=args.end, limit=args.limit)
+                              start=args.start, end=args.end, limit=args.limit,
+                              exclude=GLITCH)   # 排除 5 檔價格 glitch 壞股（與 ma_cross 同口徑）
     # 結果分流：baseline / opt1 各自獨立子資料夾（對照用、互不覆蓋）；
-    # 注意 variant 只是輸出位置，真正行為由 buy_signal 的「# 優化 #1」註解決定，務必一致
+    # 注意 variant 只是輸出位置，真正行為由 buy_signal 的「# 優化 #N」註解決定，務必一致
     out_dir = os.path.join(RESULT_DIR, "single_ma", args.variant)
     label = f"single_ma_{args.ma}"
     written = batch.write_results(result, out_dir, label, write_trades=args.trades)
@@ -251,7 +267,7 @@ def main(argv) -> int:
         print(f"  - {os.path.basename(path)}")
     if result["failed"]:
         print(f"失敗檔（前 10）: {result['failed'][:10]}")
-    print(f"⚠️ 行為由 buy_signal 內『# 優化 #1』那行的註解決定；請確認與 --variant={args.variant} 一致")
+    print(f"⚠️ 行為由 buy_signal 內對應的『# 優化 #N』那行的註解決定；請確認與 --variant={args.variant} 一致")
     return 0
 
 

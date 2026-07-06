@@ -11,13 +11,13 @@
   #2 VOL_ADX>0      波動率：交叉前一根 ADX(14) < VOL_ADX（盤整時才進）。△ PF 小升、量大減
   #3 CONFIRM        雙重確認（連 2 日 short>long 才進）。❌ 對雙均線無效
   #4 ANGLE_DAYS>0   嚴格夾角：short>long 且 ratio(短/長) 連 N 日遞增（--angle-days N 或 --angle3=3）。○ 長組合輕微正向
-  #5 STRONGK        交叉當日強 K（長紅開→收≥5% 或 跳空過長均線）。✅ 長組合 EV(Trim) 大升（最佳）
-  #6 ALIGN          多頭排列：比 long 更長的均線呈多頭排列才進（併入自原 ma_align）。❌ 不優於 baseline
+  #5 STRONGK        交叉當日強 K（長紅開→收≥5% 或 跳空過短均線）。✅ 長組合 EV(Trim) 大升（最佳）〔跳空基準 2026-06-26 由長均改短均，21 組逐格對比影響可忽略：訊號主由長紅貢獻，跳空僅補位；長組合 50/200·60/200·120/200 仍甜蜜區〕
+  #6 ALIGN          多頭排列（新定義）：120日線>200日線 且 收盤>120日線（長線仍多頭格局）才進，固定120/200。〔1000張基準下重測中〕
   #7 VOL_BOTH       量能 BOTH（lab 冠軍量能）：當日量 > 20日均量×1.5 且 連 3 日量 ≥ 100萬股。❌ 過濾過度：量砍到1/10、EV(Trim)全轉負（長組合 +185→−86）
   #8 CHOCH          CHoCH 早期出場（ZigZag 2% 進場以來 lower-high 出場；死叉 或 CHoCH）。❌ 長組合有害：勝率升但砍趨勢利潤、EV(Trim)轉負（60/200 +195→−61）
   #9 EXIT_BELOW_SHORT 出場加嚴：收盤由上跌破短均線也出場（除死亡交叉外，--exit-below-short）。❌ 全21組有害：黃金交叉後價格本就會回測短均，等於「一拉回就跑」，持有天全崩(50/200 236→42)、砍掉趨勢利潤；長均線200那5組 EV(Trim) 由正(+14~+194)全翻負(−101~−145)、去極值PF 1.0~1.15→~0.5。
   #10 DIVERGE        夾角擴大進場（短均N日%斜率>長均%斜率）/ 收斂或死叉出場（--diverge [--diverge-margin X] [--slope-win N]）。❌ 同 #9：收斂出場太敏感、趨勢途中斜率波動就出場，持有天 236→42~53、交易×2.8、長均200那3組 EV(Trim) +93~+194 全翻負(−96~−115)。問題在「出場」不在進場。純進場版（--diverge-entry-only，只夾角擴大進場+死叉出場）= ○ 微幅：幾乎同 baseline（交叉當下短均本就比長均爬得快，「夾角擴大」與交叉高度重疊），長組合 EV(Trim) +184→+194/+194→+201/+93→+105、去極PF +0.01~0.03，屬 #4 那類微調、非 #5 強K 等級。
-  #11 ANGLE_DEG      黃金交叉夾角(短均-長均度數)>N度才進（--angle-deg N；每日%斜率當正切）。✅ 有效(≈強K等級)：夾角>20度長組合 EV(Trim) 大升、Trim PF 全>1（50/120 −19→+137、60/120 −16→+277、50/200 +184→+329、60/200 +194→+357；EV(Trim) 甚至高於強K），交易砍至~1/3，本質同強K=順動能陡升交叉。⚠️ 120/200 僅1823筆(EVTrim+1185/TrimPF1.98)樣本小不穩；且未濾流動性、陡升交叉恐偏小型股，可成交性待驗。
+  #11 ANGLE_DEG      黃金交叉夾角(短均-長均度數)>N度才進（--angle-deg N；每日%斜率當正切）。✅ 有效(≈強K等級)：夾角>20度長組合 EV(Trim) 大升、Trim PF 全>1（50/120 −19→+137、60/120 −16→+277、50/200 +184→+329、60/200 +194→+357；EV(Trim) 甚至高於強K），交易砍至~1/3，本質同強K=順動能陡升交叉。**+流動性300張仍撐住(真．可成交、非小型股幻覺)**：EV(Trim)全正、Trim PF 多數>1（60/120 +317/1.19最強、50/200 +197/1.04、60/200 +186/1.02；50/120 0.96微跌破）。⚠️ 120/200 僅~1.2-1.8k筆樣本小不穩。**60/120+夾角20度+300張=最強可成交配方(優於強K+300)**。
 
 執行（全市場、掃資料夾、彙總；輸出 result/ma_cross/<variant>/，格式同 single_ma）：
   python _02_strategy/ma_strategy/ma_cross_strategy.py <資料夾> --short 50 --long 200 [--confirm] [--angle3]
@@ -39,13 +39,10 @@ from _01_data.indicators_trend import calculate_sma
 from _01_data.indicators_pattern import calculate_zigzag
 from _02_strategy.base.vbt import batch
 from _02_strategy.base.vbt.single import VbtSingleStrategy
+# 標準回測區間 DEFAULT_START/END 與資料品質排除集 GLITCH：跨策略共用，統一由 base/vbt/common 取用（單一定義）。
+from _02_strategy.base.vbt.common import DEFAULT_START, DEFAULT_END, GLITCH
 
 RESULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "result")
-DEFAULT_START = "2001-01-01"
-DEFAULT_END = "2025-12-31"
-ALL_MAS = (5, 10, 20, 50, 60, 120, 200)   # 多頭排列判斷用的標準均線集合（ALIGN 旗標）
-# 價格 glitch 壞資料股（近零價/天價，見 docs data-quality 掃描）；全市場回測一律排除、與 reference 同口徑
-GLITCH = {"3591.TW", "8039.TW", "8027.TWO", "6283.TW", "3666.TWO"}
 
 
 def _ma(df: pd.DataFrame, window: int) -> pd.Series:
@@ -65,9 +62,9 @@ class MACrossStrategy(VbtSingleStrategy):
     CONFIRM = False         # 連 2 日 short>long 才進
     ANGLE_DAYS = 0          # >0：short>long 且 ratio 連 N 日遞增（夾角擴大 N 日驗證）
     VOL_ADX = 0.0           # >0：交叉前一根 ADX(14) < VOL_ADX 才進
-    STRONGK = False         # 交叉當日 長紅 或 跳空過長均線
+    STRONGK = False         # 交叉當日 長紅 或 跳空過短均線
     MIN_VOL_ZHANG = 0       # >0：5 日均量 > N×1000 股
-    ALIGN = False           # 多頭排列：比 long 更長的均線呈多頭排列才進（併入自 ma_align 多頭排列突破）
+    ALIGN = False           # 多頭排列（新定義）：120日線>200日線 且 收盤>120日線（長線仍多頭）才進，固定120/200
     VOL_BOTH = False        # 量能 BOTH（lab 冠軍）：當日量 > 20日均量×1.5 且 連 3 日量 ≥ 100萬股
     CHOCH = False           # CHoCH 早期出場（ZigZag 2% lower-high 出場；路徑相依、覆寫 build_signals）
     EXIT_BELOW_SHORT = False  # #9 出場：收盤由上跌破短均線也出場（除死亡交叉外）
@@ -76,6 +73,7 @@ class MACrossStrategy(VbtSingleStrategy):
     SLOPE_WIN = 5             # #10 斜率視窗：以 MA 的 N 日 %變化當斜率（scale-invariant）
     DIVERGE_EXIT = True       # #10 DIVERGE 時是否加「收斂出場」（False=只用死叉出場，純測進場品質）
     ANGLE_DEG = 0.0           # #11 黃金交叉「夾角(短均-長均)度數 > 此值」才進（filter，疊在交叉上；每日%斜率當正切）
+    MIN_VOL_SHARES = 0        # 進場「當日成交量 > N 股」才進（filter；與 MIN_VOL_ZHANG 的5日均量不同，這是當日量）
 
     def add_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """短/長均線引用 _01_data 指標(sma)；ADX/量能均線/強K/zigzag 無對應 indicators 故依需求補。"""
@@ -91,9 +89,9 @@ class MACrossStrategy(VbtSingleStrategy):
         df["angle_gap"] = df["angle_short"] - df["angle_long"]
         df["vol_ma5"] = df["volume"].rolling(5).mean()
         df["vol_ma20"] = df["volume"].rolling(20).mean()      # 量能 BOTH 相對放量基準
-        # 強 K：長紅(開→收≥5%) 或 跳空開在長均之上
+        # 強 K：長紅(開→收≥5%) 或 跳空開在短均之上（跳空基準用短均，非長均）
         df["long_red"] = df["close"] >= df["open"] * 1.05
-        df["gap_over_long"] = (df["open"] > df["ma_long"]) & (df["open"] > df["close"].shift(1))
+        df["gap_over_short"] = (df["open"] > df["ma_short"]) & (df["open"] > df["close"].shift(1))
         # ADX(14) Wilder（自算）
         high, low, close = df["high"], df["low"], df["close"]
         prev_c = close.shift(1)
@@ -107,15 +105,11 @@ class MACrossStrategy(VbtSingleStrategy):
         minus_di = 100 * minus_dm.ewm(alpha=1 / p, adjust=False).mean() / atr
         dx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di)).fillna(0.0)
         df["adx"] = dx.ewm(alpha=1 / p, adjust=False).mean()
-        # ALIGN：比 long 更長的標準均線是否多頭排列（短>長逐一成立）；併入自 ma_align
-        longer = [m for m in ALL_MAS if m > self.LONG_MA]
-        if len(longer) >= 2:
-            align = pd.Series(True, index=df.index)
-            for a, b in zip(longer[:-1], longer[1:]):
-                align &= _ma(df, a) > _ma(df, b)
-            df["bull_align"] = align
-        else:
-            df["bull_align"] = True   # 無 2 條以上更長均線 → 不設限制
+        # ALIGN（新定義）：長線仍處多頭格局才進＝120日線 > 200日線 且 收盤 > 120日線。
+        # 固定用 120/200（不隨交叉的短/長變動），代表「整體長期趨勢還在多頭」這道大方向濾網。
+        ma120 = _ma(df, 120)
+        ma200 = _ma(df, 200)
+        df["bull_align"] = (ma120 > ma200) & (df["close"] > ma120)
         if self.CHOCH:
             calculate_zigzag(df, 0.02)   # 型態指標：擺動高低點（CHoCH 用），引用自 _01_data.indicators_pattern
         return df
@@ -141,9 +135,11 @@ class MACrossStrategy(VbtSingleStrategy):
         if self.VOL_ADX and self.VOL_ADX > 0:
             sig = sig & (df["adx"].shift(1) < self.VOL_ADX)
         if self.STRONGK:
-            sig = sig & (df["long_red"] | df["gap_over_long"])
+            sig = sig & (df["long_red"] | df["gap_over_short"])
         if self.ANGLE_DEG and self.ANGLE_DEG > 0:
             sig = sig & (df["angle_gap"] > self.ANGLE_DEG)   # #11 夾角(短均-長均)度數 > 門檻才進
+        if self.MIN_VOL_SHARES and self.MIN_VOL_SHARES > 0:
+            sig = sig & (df["volume"] > self.MIN_VOL_SHARES)  # 當日成交量 > N 股 才進
         if self.MIN_VOL_ZHANG and self.MIN_VOL_ZHANG > 0:
             sig = sig & (df["vol_ma5"] > self.MIN_VOL_ZHANG * 1000)
         if self.ALIGN:
@@ -227,6 +223,7 @@ def main(argv) -> int:
     parser.add_argument("--slope-win", type=int, default=5, help="#10 斜率視窗(MA N日%%變化)")
     parser.add_argument("--diverge-entry-only", action="store_true", help="#10 只用夾角擴大進場+死叉出場(拿掉收斂出場)")
     parser.add_argument("--angle-deg", type=float, default=0.0, help="#11 黃金交叉夾角(短均-長均)度數 > 此值才進(每日%%斜率當正切)")
+    parser.add_argument("--min-vol-shares", type=int, default=0, help="進場當日成交量 > N 股 才進(當日量,非5日均量)")
     parser.add_argument("--trades", action="store_true")
     parser.add_argument("--start", default=DEFAULT_START)
     parser.add_argument("--end", default=DEFAULT_END)
@@ -253,6 +250,7 @@ def main(argv) -> int:
     strat.SLOPE_WIN = args.slope_win
     strat.DIVERGE_EXIT = not args.diverge_entry_only
     strat.ANGLE_DEG = args.angle_deg
+    strat.MIN_VOL_SHARES = args.min_vol_shares
 
     result = batch.run_folder(strat, args.folder,
                               start=args.start, end=args.end, limit=args.limit,

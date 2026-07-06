@@ -22,10 +22,9 @@ if _project_root not in sys.path:
 import pandas as pd
 
 from _01_data.indicators_trend import calculate_sma
+from _02_strategy.base.vbt.common import GLITCH   # 跨策略共用的資料品質排除集（單一定義，勿另立第二份）
 from _03_multi_strategy.base.vbt.multi import VbtMultiStrategy
 
-# 與 ma_cross 研究一致：價格 glitch 壞資料股事前剔除
-GLITCH = {"3591.TW", "8039.TW", "8027.TWO", "6283.TW", "3666.TWO"}
 DEFAULT_DATA = r"F:\stock-analyzer\data\stock_data"
 
 
@@ -42,14 +41,20 @@ class MultiMACross(VbtMultiStrategy):
 
     SHORT_MA = 50
     LONG_MA = 200
+    MIN_VOL_ZHANG = 0       # >0：5 日均量 > N×1000 股 才進（流動性門檻，與單股 ma_cross 同口徑）
 
     def add_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         df["_above"] = _ma(df, self.SHORT_MA) > _ma(df, self.LONG_MA)
+        if self.MIN_VOL_ZHANG and self.MIN_VOL_ZHANG > 0:
+            df["vol_ma5"] = df["volume"].rolling(5).mean()
         return df
 
     def buy_signal(self, df: pd.DataFrame) -> pd.Series:
         above = df["_above"]
-        return above & ~above.shift(1, fill_value=False)   # 黃金交叉（上穿）
+        sig = above & ~above.shift(1, fill_value=False)    # 黃金交叉（上穿）
+        if self.MIN_VOL_ZHANG and self.MIN_VOL_ZHANG > 0:
+            sig = sig & (df["vol_ma5"] > self.MIN_VOL_ZHANG * 1000)
+        return sig
 
     def sell_signal(self, df: pd.DataFrame) -> pd.Series:
         above = df["_above"]
@@ -97,6 +102,7 @@ def main(argv) -> int:
     p.add_argument("--ratio", type=float, default=1.0 / 30.0)
     p.add_argument("--min-invest", type=float, default=10_000.0)
     p.add_argument("--cash", type=float, default=1_000_000.0)
+    p.add_argument("--min-vol-zhang", type=int, default=0, help="流動性:5日均量>N張(=N*1000股)才進(0=不濾)")
     p.add_argument("--start", default="2001-01-01")
     p.add_argument("--end", default="2025-12-31")
     p.add_argument("--limit", type=int, default=None, help="只讀前 N 檔（測試用）")
@@ -110,6 +116,7 @@ def main(argv) -> int:
     strat = MultiMACross(sizing_mode=args.mode, invest_ratio=args.ratio,
                          min_invest=args.min_invest, initial_cash=args.cash)
     strat.SHORT_MA, strat.LONG_MA = args.short, args.long
+    strat.MIN_VOL_ZHANG = args.min_vol_zhang
     res = strat.run(data, start_date=args.start, end_date=args.end)
 
     s = res["summary"]
