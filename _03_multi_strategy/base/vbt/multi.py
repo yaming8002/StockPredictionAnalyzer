@@ -157,10 +157,29 @@ class VbtMultiStrategy:
     def priority(self, df: pd.DataFrame, stock_id: str):
         """
         #4 multi 專屬：買入優先分數（分數高者現金不足時優先成交）。
-        預設回 None → 改用 stock_id 欄序（賣先買後，買單 id 小者優先）。
-        覆寫範例：return df["cmf_20"]（分數高者優先，如資金流指標較強者先成交）。
+        **這是留給開發者自行設計排序邏輯的擴充點**：覆寫本函式、回傳一條每日分數 Series，
+        引擎會在資金有限時按分數高→低依序成交，餘者擋單。
+        預設回 None → 退回 stock_id 欄序（賣先買後，買單 id 小者優先）。
+        自行實作範例：return df["cmf_20"]（資金流較強者先成交）。
+        懶得自寫時，也可直接回傳下方現成 helper 之一，如 self.prio_by_turnover(df)。
         """
         return None
+
+    # ── 現成排序 helper（非主軸；priority() 覆寫時可直接呼叫，省得重寫分數）──────
+    @staticmethod
+    def prio_by_turnover(df: pd.DataFrame, window: int = 5) -> pd.Series:
+        """流動性優先：5 日均量 × 收盤價（成交金額基準，與流動性門檻同口徑）。"""
+        return df["volume"].rolling(window).mean() * df["close"]
+
+    @staticmethod
+    def prio_by_low_price(df: pd.DataFrame) -> pd.Series:
+        """低價優先：-收盤價（低價股先買，同本金可佈更多檔）。"""
+        return -df["close"]
+
+    @staticmethod
+    def prio_by_high_price(df: pd.DataFrame) -> pd.Series:
+        """高價優先：收盤價（高價股先買）。"""
+        return df["close"]
 
     def exec_price(self, df: pd.DataFrame) -> pd.Series:
         """成交價（預設 close；子類可改 open 做隔日開盤成交，配合 build_signals 位移）。"""

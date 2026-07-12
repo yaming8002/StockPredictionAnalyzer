@@ -19,6 +19,7 @@ _project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
+import numpy as np
 import pandas as pd
 
 from _01_data.indicators_trend import calculate_sma
@@ -42,11 +43,37 @@ class MultiMACross(VbtMultiStrategy):
     SHORT_MA = 50
     LONG_MA = 200
     MIN_VOL_ZHANG = 0       # >0：5 日均量 > N×1000 股 才進（流動性門檻，與單股 ma_cross 同口徑）
+    ANGLE_DEG = 0.0         # >0：黃金交叉「夾角(短均-長均)度數 > 此值」才進（濾網，與單股 ma_cross 同口徑）
+    VOL_ADX = 0.0           # >0：交叉前一根 ADX(14) < 此值才進（盤整才進；與單股 ma_cross 同口徑）
+    SLOPE_WIN = 5           # 夾角用的均線 N 日 %斜率視窗（與單股 SLOPE_WIN 一致）
 
     def add_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         df["_above"] = _ma(df, self.SHORT_MA) > _ma(df, self.LONG_MA)
         if self.MIN_VOL_ZHANG and self.MIN_VOL_ZHANG > 0:
             df["vol_ma5"] = df["volume"].rolling(5).mean()
+        # 夾角度數：每日%斜率當正切 → arctan 換度數；夾角 = 短均角度 − 長均角度（口徑同單股 ma_cross）
+        if self.ANGLE_DEG and self.ANGLE_DEG > 0:
+            w = self.SLOPE_WIN
+            ma_s, ma_l = _ma(df, self.SHORT_MA), _ma(df, self.LONG_MA)
+            sl_short = ma_s / ma_s.shift(w) - 1
+            sl_long = ma_l / ma_l.shift(w) - 1
+            angle_short = np.degrees(np.arctan(sl_short / w * 100))
+            angle_long = np.degrees(np.arctan(sl_long / w * 100))
+            df["angle_gap"] = angle_short - angle_long
+        # ADX(14) Wilder（自算，口徑同單股 ma_cross）
+        if self.VOL_ADX and self.VOL_ADX > 0:
+            high, low, close = df["high"], df["low"], df["close"]
+            prev_c = close.shift(1)
+            up = high.diff(); dn = -low.diff()
+            plus_dm = up.where((up > dn) & (up > 0), 0.0)
+            minus_dm = dn.where((dn > up) & (dn > 0), 0.0)
+            tr = pd.concat([high - low, (high - prev_c).abs(), (low - prev_c).abs()], axis=1).max(axis=1)
+            p = 14
+            atr = tr.ewm(alpha=1 / p, adjust=False).mean()
+            plus_di = 100 * plus_dm.ewm(alpha=1 / p, adjust=False).mean() / atr
+            minus_di = 100 * minus_dm.ewm(alpha=1 / p, adjust=False).mean() / atr
+            dx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di)).fillna(0.0)
+            df["adx"] = dx.ewm(alpha=1 / p, adjust=False).mean()
         return df
 
     def buy_signal(self, df: pd.DataFrame) -> pd.Series:
@@ -54,6 +81,10 @@ class MultiMACross(VbtMultiStrategy):
         sig = above & ~above.shift(1, fill_value=False)    # 黃金交叉（上穿）
         if self.MIN_VOL_ZHANG and self.MIN_VOL_ZHANG > 0:
             sig = sig & (df["vol_ma5"] > self.MIN_VOL_ZHANG * 1000)
+        if self.VOL_ADX and self.VOL_ADX > 0:
+            sig = sig & (df["adx"].shift(1) < self.VOL_ADX)   # 交叉前一根 ADX < 門檻
+        if self.ANGLE_DEG and self.ANGLE_DEG > 0:
+            sig = sig & (df["angle_gap"] > self.ANGLE_DEG)    # 夾角度數 > 門檻
         return sig
 
     def sell_signal(self, df: pd.DataFrame) -> pd.Series:
@@ -68,6 +99,10 @@ class MultiMACross(VbtMultiStrategy):
 
     def exec_price(self, df: pd.DataFrame) -> pd.Series:
         return df["open"]   # 隔日開盤價成交
+
+    def priority(self, df: pd.DataFrame, stock_id: str) -> pd.Series:
+        # 預設以流動性(成交金額)為主排序；要做別的控制測試改寫這行即可
+        return self.prio_by_turnover(df)
 
 
 def load_data(folder: str, limit: int = None) -> dict:
