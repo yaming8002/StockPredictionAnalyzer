@@ -247,7 +247,22 @@ class VbtMultiStrategy:
         summary = common.summarize_trades(trades)
         blocked = int(blocked_out[0])
         summary["擋單數"] = blocked
-        return {"trades": trades, "summary": summary, "blocked_orders": blocked}
+
+        # 組合層指標（用共用現金組合的權益曲線，非 MC）：最終權益、最大回撤
+        val = pf.value()
+        if hasattr(val, "columns"):
+            val = val.iloc[:, 0]
+        if len(val):
+            final_equity = float(val.iloc[-1])
+            peak = val.cummax()
+            dd = ((peak - val) / peak).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+            max_dd = float(dd.max()) * 100.0
+        else:
+            final_equity, max_dd = float(self.initial_cash), 0.0
+        summary["最終權益"] = round(final_equity, 2)
+        summary["最大回撤(%)"] = round(max_dd, 2)
+        return {"trades": trades, "summary": summary, "blocked_orders": blocked,
+                "equity": val}
 
     def _postprocess(self, pf) -> pd.DataFrame:
         rec = pf.trades.records_readable

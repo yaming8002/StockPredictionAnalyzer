@@ -229,3 +229,55 @@ def summarize_trades(records: pd.DataFrame) -> dict:
         "虧損信賴區間上限(95%)": lose_ci[1],
     }
     return {**base, **trim, **ci}
+
+
+# ── 回測結果主表「規格列」helper（對齊 memory backtest-result-table-spec）─────────────
+# 規格＝單一主表固定 10 欄：策略鍵（標籤，由呼叫端傳）＋下列 9 個指標欄（順序固定）。
+# 所有 driver 一律用 spec_row 出列，杜絕「手挑欄位」造成漏欄（driver 曾因手打 row 漏掉持有天/獲利均/虧損均）。
+SPEC_COLUMNS = ("交易次數", "勝率%", "平均持有天", "獲利平均%", "虧損平均%",
+                "中位數%", "期望值/筆", "獲利因子", "總獲利(萬)")
+
+# 規格欄名 → summarize_trades 回傳的 summary key（"總獲利(萬)" 為特例：總獲利 ÷ 10000）
+_SPEC_MAP = {
+    "交易次數": "交易次數",
+    "勝率%": "勝率(%)",
+    "平均持有天": "平均持有天數",
+    "獲利平均%": "平均獲利報酬率(%)",
+    "虧損平均%": "平均虧損報酬率(%)",
+    "中位數%": "中位數報酬率(%)",
+    "期望值/筆": "期望報酬值(EV)",
+    "獲利因子": "獲利因子(PF)",
+}
+
+
+def spec_row(summary: dict, **labels) -> dict:
+    """把 summarize_trades 的 summary 轉成「規格固定 9 指標欄」的有序 row（標籤欄在前）。
+
+    labels：策略鍵與任意額外標籤欄（如 進場/投法/份數/擋單），依傳入順序置於指標欄之前。
+    缺任何必要 summary key → 直接 raise（源頭杜絕漏欄；別再手打 row）。
+    """
+    row = dict(labels)                       # 標籤欄在前（dict 保序）
+    for col in SPEC_COLUMNS:
+        if col == "總獲利(萬)":
+            if "總獲利" not in summary:
+                raise KeyError("summary 缺『總獲利』，無法出規格列")
+            row[col] = round(summary["總獲利"] / 10000, 1)
+            continue
+        src = _SPEC_MAP[col]
+        if src not in summary:
+            raise KeyError(f"summary 缺『{src}』（對應規格欄『{col}』），無法出規格列")
+        row[col] = summary[src]
+    return row
+
+
+def assert_spec_columns(rows) -> None:
+    """出表前檢查：每列都含規格 9 欄，缺就 raise。rows 可為 list[dict] 或 DataFrame。"""
+    if hasattr(rows, "columns"):             # DataFrame
+        cols = set(rows.columns)
+    elif rows:
+        cols = set(rows[0])
+    else:
+        cols = set()
+    missing = [c for c in SPEC_COLUMNS if c not in cols]
+    if missing:
+        raise ValueError(f"結果表缺規格欄：{missing}（規格 9 欄＝{list(SPEC_COLUMNS)}）")
