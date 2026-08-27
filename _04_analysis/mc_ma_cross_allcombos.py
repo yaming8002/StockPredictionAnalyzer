@@ -18,7 +18,8 @@ if _root not in sys.path:
 import pandas as pd
 
 from _03_multi_strategy.ma_cross.multi_ma_cross import MultiMACross
-from _02_strategy.base.vbt.common import GLITCH   # 跨策略共用的資料品質排除集（單一定義）
+# 跨策略共用的單一定義（資料品質排除集＋標準回測區間），勿在此另立第二份
+from _02_strategy.base.vbt.common import GLITCH, DEFAULT_START, DEFAULT_END
 from _04_analysis.analyze_vbt import monte_carlo
 
 DATA = r"F:\stock-analyzer\data\stock_data"
@@ -61,7 +62,7 @@ def main():
             strat = MultiMACross(sizing_mode="fixed", min_invest=10_000.0,
                                  initial_cash=INIT_CASH)
             strat.SHORT_MA, strat.LONG_MA = s, l
-            res = strat.run(data, start_date="2001-01-01", end_date="2025-12-31")
+            res = strat.run(data, start_date=DEFAULT_START, end_date=DEFAULT_END)
             trades = res["trades"]
             mc = monte_carlo(trades, initial_cash=INIT_CASH, n_sims=N_SIMS,
                              ruin_ratio=RUIN_RATIO)

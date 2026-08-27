@@ -23,7 +23,8 @@ import numpy as np
 import pandas as pd
 
 from _01_data.indicators_trend import calculate_sma
-from _02_strategy.base.vbt.common import GLITCH   # 跨策略共用的資料品質排除集（單一定義，勿另立第二份）
+# 跨策略共用的單一定義（資料品質排除集＋標準回測區間），勿在此另立第二份
+from _02_strategy.base.vbt.common import GLITCH, DEFAULT_START, DEFAULT_END
 from _03_multi_strategy.base.vbt.multi import VbtMultiStrategy
 
 DEFAULT_DATA = r"F:\stock-analyzer\data\stock_data"
@@ -138,8 +139,9 @@ def main(argv) -> int:
     p.add_argument("--min-invest", type=float, default=10_000.0)
     p.add_argument("--cash", type=float, default=1_000_000.0)
     p.add_argument("--min-vol-zhang", type=int, default=0, help="流動性:5日均量>N張(=N*1000股)才進(0=不濾)")
-    p.add_argument("--start", default="2001-01-01")
-    p.add_argument("--end", default="2025-12-31")
+    # 區間預設一律吃 base/vbt/common 的單一定義，不在此另立第二份（寫死會跟標準區間脫鉤）
+    p.add_argument("--start", default=DEFAULT_START)
+    p.add_argument("--end", default=DEFAULT_END)
     p.add_argument("--limit", type=int, default=None, help="只讀前 N 檔（測試用）")
     args = p.parse_args(argv[1:])
 
