@@ -2,7 +2,7 @@
 技術指標（二）量能與動能：誰在買、超不超買
 ================================================
 
-對應文章〈常見技術指標（二）量能與動能〉。
+對應文章〈常見技術指標（二）量能與動能〉：https://stockanalyzer.sailforthlab.dev/posts/2026/06/indicators-momentum-volume/
 一組純函式：輸入含 OHLCV 的 DataFrame，回傳「多了指標欄位」的 DataFrame。
 
 指標：RSI / KD / CMF（資金流量）/ OBV（能量潮）

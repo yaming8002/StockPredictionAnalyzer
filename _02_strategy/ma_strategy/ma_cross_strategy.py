@@ -5,6 +5,8 @@
   進場：short MA 上穿 long MA（黃金交叉）→ 買（baseline）
   出場：short MA 下穿 long MA（死亡交叉）→ 賣
   成交：判定日「隔日開盤」（基底統一，無 look-ahead）
+【對應文章】均線交叉系列：https://stockanalyzer.sailforthlab.dev/archives/?subcategory=%E5%9D%87%E7%B7%9A%E4%BA%A4%E5%8F%89
+
 
 優化紀錄（#N = 改動序號，依測試先後；旗標設定切換，最優版可再凍結成註解）：
   #1 MIN_VOL_ZHANG  流動性底線：5 日均量 > N 張（=N×1000 股）。✅ 勝率不掉、可成交

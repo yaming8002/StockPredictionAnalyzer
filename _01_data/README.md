@@ -1,6 +1,7 @@
 # 股票資料取得與處理（_01_data）
 
-這個資料夾示範「從零取得台股資料」的完整流程，搭配系列文章使用。
+這個資料夾示範「從零取得台股資料」的完整流程，搭配系列文章使用：
+[台股清單](https://stockanalyzer.sailforthlab.dev/posts/2026/06/fetch-tw-stock-list/)、[技術指標（一）趨勢](https://stockanalyzer.sailforthlab.dev/posts/2026/06/indicators-trend/)、[（二）量能與動能](https://stockanalyzer.sailforthlab.dev/posts/2026/06/indicators-momentum-volume/)、[（三）波動與突破](https://stockanalyzer.sailforthlab.dev/posts/2026/06/indicators-volatility/)。
 分成三個主題，照順序跑即可：
 
 1. **取得股票清單** — 從證交所官方資料抓出全台股代號
@@ -66,7 +67,7 @@ python stock_technical.py
 | `fetch_stock_list.py` | 1 | 抓全台股清單 → `stock_list.csv` |
 | `download_stock.py` | 2 基礎 | 單檔 / 批次下載，CSV / parquet |
 | `download_full_history.py` | 2 進階 | 可續傳的全史大量下載 |
-| `indicators_trend.py` | 3 | 趨勢指標：SMA / EMA / MACD / 布林 / BIAS |
+| `indicators_trend.py` | 3 | 趨勢指標：SMA / EMA / MACD / 布林 / BIAS / ADX / 拋物線 SAR |
 | `indicators_momentum_volume.py` | 3 | 量能動能：RSI / KD / CMF / OBV |
-| `indicators_volatility.py` | 3 | 波動：ATR% / 報酬率波動率 / 唐奇安通道 |
+| `indicators_volatility.py` | 3 | 波動：ATR / ATR% / 報酬率波動率 / 唐奇安通道 / Supertrend |
 | `stock_technical.py` | 3 | 聚合入口：re-export 三模組 + `add_all_indicators()` |

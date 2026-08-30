@@ -9,6 +9,8 @@ KD 交叉策略（single KD cross）— kd_strategy 套件下的方案
 
 KD 參數固定傳統值 n=9、K/D 各 3 日平滑（引用 _01_data.calculate_kd，不在策略內自算）。
 
+【對應文章】KD 交叉系列：https://stockanalyzer.sailforthlab.dev/archives/?subcategory=KD%20%E4%BA%A4%E5%8F%89
+
 優化以「註解切換」管理（比照 single_ma_strategy）：baseline = 基本交叉；各優化只開自己那行，互斥不疊：
   # 優化 #1（低/高檔交叉）需同時改 buy_signal / sell_signal 兩行，兩行一起開／一起關：
     進場黃金交叉須落在低檔（K、D 都 < 20）、出場死亡交叉須落在高檔（K、D 都 > 80）。
@@ -33,7 +35,7 @@ KD 參數固定傳統值 n=9、K/D 各 3 日平滑（引用 _01_data.calculate_k
      證明 KD 純交叉的虧損來源在出場（死叉洗掉獲利）、不在進場。#6 甚至 +3,282 萬 > opt1 的 +1,913 萬。
      可成交宇宙覆核（2026-07-10，進場加 1,000 萬成交金額門檻）：只剩 #6（PF 1.635、+1,581 萬）與 opt1
      （PF 1.445）撐住；#7/#8/#9 全跌破 1.0（裸版正報酬多來自低流動性小股）。詳見
-     blog/reference/single_kd/2026-07-10_kd_liquidity_1000w_evaluation.md。
+     （該份流動性覆核屬作者內部回測紀錄，未隨本公開鏡像釋出；結論與數據見文章系列。）
 
 ⚠️ opt1 的高檔死亡交叉出場較嚴：個股若一路陰跌、K/D 未摸到 80 就死叉，可能長抱不出場，
    交易數會明顯少於 baseline。這是「正統低/高檔」定義的固有性質，照定義實作、由結果表反映。

@@ -3,11 +3,13 @@
 ====================================
 
 指標依「衡量什麼」分三組，各自一個模組（對應系列文章三篇）：
-  - indicators_trend           趨勢：SMA / EMA / MACD / 布林 / BIAS
+  - indicators_trend           趨勢：SMA / EMA / MACD / 布林 / BIAS / ADX / 拋物線 SAR
   - indicators_momentum_volume 量能動能：RSI / KD / CMF / OBV
-  - indicators_volatility      波動：ATR% / 報酬率波動率 / 唐奇安通道
+  - indicators_volatility      波動：ATR / ATR% / 報酬率波動率 / 唐奇安通道 / Supertrend
 
 本檔 re-export 全部函式，並提供 add_all_indicators 一次套用，方便單一匯入。
+注意 add_all_indicators 只收「向量化、算起來便宜」的指標；ADX / SAR / Supertrend
+需要逐根掃描，加進去會拖慢每一個呼叫者，故僅 re-export、不列入一次套用。
 
 執行範例（讀一檔資料 → 套用全部指標 → 存回）：
   python _01_data/stock_technical.py
@@ -22,13 +24,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from indicators_trend import (  # noqa: E402
     calculate_sma, calculate_ema, calculate_macd,
-    calculate_bollinger_bands, calculate_bias,
+    calculate_bollinger_bands, calculate_bias, calculate_adx, calculate_psar,
 )
 from indicators_momentum_volume import (  # noqa: E402
     calculate_rsi, calculate_kd, calculate_cmf, calculate_obv,
 )
 from indicators_volatility import (  # noqa: E402
-    calculate_atr_pct, calculate_return_volatility, calculate_donchian,
+    calculate_atr, calculate_atr_pct, calculate_return_volatility,
+    calculate_donchian, calculate_supertrend,
 )
 
 
