@@ -24,8 +24,9 @@ MACD 有三種「本質不同」的進場邏輯，各自獨立初探（每一種
 
 【三處註解切換 — 動手前先看這裡】
   1. buy_signal   ：三基礎互斥擇一 ＋ 進場濾網（一次一條，疊在基礎上）。
-  2. sell_signal  ：出場互斥擇一（原生出場，或用取代型出場整條換掉）。
-  3. EXIT_RULE    ：類別屬性，路徑相依出場（頂頂低取代 ＋ 五條疊加風控），一次一條。
+  2. sell_signal  ：出場，一次一條（原生出場；新規則可「附加」疊上去，或「取代」整條換掉）。
+  3. EXIT_RULE    ：類別屬性，路徑相依出場（頂頂低 ＋ 五條風控），一次一條；
+     每條算疊加還是取代，由 _REPLACE_RULES 切換（預設：頂頂低取代、五條風控疊加）。
      這一區之所以不放在 sell_signal，是因為它們要看「進場價 / 進場以來最高 / 已持有幾根」，
      必須逐根掃描才算得出來——沿用 base/vbt/single.build_signals docstring 的責任轉移約定
      （覆寫後由子類自行位移成隔日成交），作法比照 ma_cross_strategy 的 CHOCH。
@@ -104,16 +105,23 @@ TAKE_PROFIT = 0.20                  # 固定停利 +20%
 TIME_BARS = 60                      # 時間出場：抱滿 60 根 K
 
 # ── 路徑相依出場的代碼（給 EXIT_RULE 用）──
-# 取代型：原出場整條拿掉，只用這一條
 EXIT_NONE = 0
 EXIT_LOWER_HIGH = 1                 # 頂頂低（進場以來出現較低的 ZigZag 擺動高點）
-# 疊加型：原出場留著，額外多一條，先觸發的先算
 EXIT_CHANDELIER = 2
 EXIT_TRAIL_PCT = 3
 EXIT_ATR_STOP = 4
 EXIT_TAKE_PROFIT = 5
 EXIT_TIME = 6
-_REPLACE_RULES = (EXIT_LOWER_HIGH,)  # 這些是「取代」，其餘代碼為「疊加」
+
+# 每條規則是「疊加」還是「取代」由 _REPLACE_RULES 決定：列在裡面的走取代，其餘走疊加。
+# 出場優化以「疊加（附加）」為主軸——原出場留著、新規則疊上去、先觸發者算。
+# 這樣量到的才是「原策略有沒有被這條規則優化」；整條換掉量到的是「換一套技術分析」，
+# 是另一個問題，故只作附錄。（進場優化同理：原訊號 AND 濾網，也是附加。）
+_REPLACE_RULES = (EXIT_LOWER_HIGH,)
+# 附錄用：把五條風控也當「唯一出場」（純取代）。開下面兩行、關上面那行；
+# 一次仍只跑一條 EXIT_RULE，列進來的只是把該條的疊加改成取代。
+# _REPLACE_RULES = (EXIT_LOWER_HIGH, EXIT_CHANDELIER, EXIT_TRAIL_PCT,
+#                   EXIT_ATR_STOP, EXIT_TAKE_PROFIT, EXIT_TIME)
 
 
 @njit(cache=True)
@@ -188,9 +196,9 @@ class SingleMacdStrategy(VbtSingleStrategy):
     """
 
     # ── 出場優化·路徑相依（一次一條；維持 EXIT_NONE＝不啟用，走 sell_signal 的向量化路徑）──
-    # 取代型（原出場整條拿掉）：
+    # 疊加／取代不在這裡決定，見 _REPLACE_RULES（預設：頂頂低取代、五條風控疊加）。
     # EXIT_RULE = EXIT_LOWER_HIGH    # 頂頂低：進場以來出現較低的 ZigZag(2%) 擺動高點
-    # 疊加型（原出場留著，先觸發的先算）：
+    # 五條風控（預設疊加；當唯一出場的純取代版，開 _REPLACE_RULES 的附錄那行）：
     # EXIT_RULE = EXIT_CHANDELIER    # 吊燈：收盤 < 進場後最高 − 3×ATR
     # EXIT_RULE = EXIT_TRAIL_PCT     # 移動停損：收盤自進場後最高回落 10%
     # EXIT_RULE = EXIT_ATR_STOP      # 固定停損：收盤 < 進場價 − 2×ATR
@@ -323,14 +331,25 @@ class SingleMacdStrategy(VbtSingleStrategy):
           基礎 B 零軸：DIF 由上下穿 0 軸。
           （註：hist 由正轉負 ⇔ DIF 下穿訊號線，與死叉「數學恆等」，故不另列。）
 
-        ── 出場優化·取代型（整條取代自然出場，一次一條）──
-          頂頂低屬取代型但需逐根掃描，改由 EXIT_RULE 那一區切換。各條的實測見文章系列。
+        ── 出場優化（一次一條）──
+          附加（主軸）：原出場留著、新規則疊上去，先觸發者算 → 用 `signal = signal | (…)`。
+          取代（附錄）：原出場整條拿掉，只用新規則         → 用 `signal = (…)`。
+          兩種寫法的差別與為什麼以附加為主軸，見檔案上方 _REPLACE_RULES 的說明。
+          頂頂低與五條風控要看進場價／進場以來最高／已持有幾根，必須逐根掃描，
+          不能寫在這裡，改由 EXIT_RULE 那一區切換。各條的實測見文章系列。
         """
         macd = df["macd"]
         close, ma_long = df["close"], df["ma_long"]
         signal = df["death"]                                       # 基礎 A 交叉 / C 背離：死亡交叉
         # signal = (macd < 0) & (macd.shift(1) >= 0)               # 基礎 B 零軸：DIF 下穿 0
         # signal = df["bear_divergence"]                           # 矩陣用：頂背離出場
+
+        # 附加型（主軸）：
+        # signal = signal | ((close < ma_long) & (close.shift(1) >= ma_long.shift(1)))  # ＋跌破 MA200
+        # signal = signal | self._ensure_supertrend(df)["supertrend_flip_down"]         # ＋Supertrend(10,3) 翻空
+        # signal = signal | self._ensure_psar(df)["psar_flip_down"]                     # ＋拋物線 SAR 翻空
+        # signal = signal | (close < df["dc_low_prev"])                                 # ＋跌破前 20 日最低
+        # 取代型（附錄）：
         # signal = (close < ma_long) & (close.shift(1) >= ma_long.shift(1))  # 取代：跌破 MA200
         # signal = self._ensure_supertrend(df)["supertrend_flip_down"]       # 取代：Supertrend(10,3) 翻空
         # signal = self._ensure_psar(df)["psar_flip_down"]                   # 取代：拋物線 SAR 翻空
