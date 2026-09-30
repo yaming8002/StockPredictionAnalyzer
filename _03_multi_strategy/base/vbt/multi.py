@@ -187,7 +187,19 @@ class VbtMultiStrategy:
 
     # ── 主流程 ───────────────────────────────────────────────
     def run(self, data_dict: dict, start_date: str = None, end_date: str = None) -> dict:
-        """data_dict: {stock_id: df（含 OHLCV 小寫 + DatetimeIndex）}。"""
+        """
+        data_dict: {stock_id: df（含 OHLCV 小寫 + DatetimeIndex）}。
+
+        內部拆成 build_panel()（掃全市場、對齊面板）＋ run_panel()（跑下單模擬）兩段，
+        行為與拆分前完全相同。要重抽上千次買入優先序時，改成自己先 build_panel 一次、
+        再反覆 run_panel，可省掉每次重掃全市場的成本（見 _04_analysis 的隨機排序 driver）。
+        """
+        panel = self.build_panel(data_dict, start_date, end_date)
+        return self.run_panel(panel)
+
+    def build_panel(self, data_dict: dict, start_date: str = None,
+                    end_date: str = None) -> dict:
+        """掃一次全市場、對齊成 (T, N) 面板。回傳的 dict 可重複餵給 run_panel。"""
         stock_ids = sorted(data_dict.keys())
         close_cols, entry_cols, exit_cols, price_cols, prio_cols = {}, {}, {}, {}, {}
         has_priority = False
@@ -224,12 +236,43 @@ class VbtMultiStrategy:
         px = price.to_numpy(dtype=np.float64)
         pr = prio.to_numpy(dtype=np.float64)
         pr = np.where(np.isnan(pr), -np.inf, pr)   # 缺 priority → 排最後
+        return {"close": close, "entries": ev, "exits": xv, "price": px,
+                "prio": pr, "has_priority": has_priority}
+
+    def run_panel(self, panel: dict, prio: np.ndarray = None,
+                  want_equity: bool = True) -> dict:
+        """
+        用既有面板跑下單模擬。prio 給定時取代面板裡的優先序（重抽排序用）。
+
+        面板與 sizing 無關（訊號、價格、優先序都不看現金），所以同一份面板可以換
+        sizing_mode / 份數 / 優先序反覆重跑。
+
+        want_equity=False 時**不算逐日權益曲線**（`pf.value()`）：全市場的權益曲線要
+        展開好幾個 (天數 × 檔數) 的暫時陣列，只要 summary 的 driver 不必付這筆。
+        回傳的 equity 會是 None、最大回撤(%) 不列入 summary。
+        """
+        close = panel["close"]
+        ev, xv, px = panel["entries"], panel["exits"], panel["price"]
+        has_priority = panel["has_priority"]
+        if prio is None:
+            pr = panel["prio"]
+        else:
+            # 缺 priority → 排最後。沒有 NaN 就直接用傳進來的陣列：全市場一份優先序是
+            # 103 MB，重抽上千次時每次都複製一份會把記憶體吃光。
+            pr = prio if not np.isnan(prio).any() else np.where(
+                np.isnan(prio), -np.inf, prio)
+            has_priority = True
 
         base_out = np.zeros(1, dtype=np.float64)        # 1 個共用現金組合
         blocked_out = np.zeros(1, dtype=np.float64)
         mode = _MODE_CODE[self.sizing_mode]
         buy_fee = common.COMMISSION
         sell_fee = common.COMMISSION + common.DUES
+
+        # vbt 預設把下單記錄陣列開成 (天數 × 檔數)——全市場是 6,000×2,258＝1,350 萬筆，
+        # 每跑一次就配置數百 MB，連跑幾次就 MemoryError。實際下單數不可能超過訊號數
+        # （_order_nb 只在 entries/exits 為真時才回單），故以訊號總數當上限。
+        max_orders = int(ev.sum() + xv.sum()) + 1
 
         pf = vbt.Portfolio.from_order_func(
             close,
@@ -241,6 +284,7 @@ class VbtMultiStrategy:
             cash_sharing=True,
             group_by=True,
             freq=self.freq,
+            max_orders=max_orders,
         )
 
         trades = self._postprocess(pf)
@@ -249,18 +293,20 @@ class VbtMultiStrategy:
         summary["擋單數"] = blocked
 
         # 組合層指標（用共用現金組合的權益曲線，非 MC）：最終權益、最大回撤
-        val = pf.value()
-        if hasattr(val, "columns"):
-            val = val.iloc[:, 0]
-        if len(val):
-            final_equity = float(val.iloc[-1])
-            peak = val.cummax()
-            dd = ((peak - val) / peak).replace([np.inf, -np.inf], np.nan).fillna(0.0)
-            max_dd = float(dd.max()) * 100.0
-        else:
-            final_equity, max_dd = float(self.initial_cash), 0.0
-        summary["最終權益"] = round(final_equity, 2)
-        summary["最大回撤(%)"] = round(max_dd, 2)
+        val = None
+        if want_equity:
+            val = pf.value()
+            if hasattr(val, "columns"):
+                val = val.iloc[:, 0]
+            if len(val):
+                final_equity = float(val.iloc[-1])
+                peak = val.cummax()
+                dd = ((peak - val) / peak).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+                max_dd = float(dd.max()) * 100.0
+            else:
+                final_equity, max_dd = float(self.initial_cash), 0.0
+            summary["最終權益"] = round(final_equity, 2)
+            summary["最大回撤(%)"] = round(max_dd, 2)
         return {"trades": trades, "summary": summary, "blocked_orders": blocked,
                 "equity": val}
 

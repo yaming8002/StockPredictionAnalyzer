@@ -15,10 +15,15 @@ from numba import njit
 
 
 @njit(cache=True)
-def _mc_core(pnl, n_sims, init_cash, ruin_level, seed):
+def _mc_core(pnl, n_sims, init_cash, ruin_level, seed, t_low, t_high):
     """
     逐路徑 bootstrap（省記憶體，不建 n_sims×n 大矩陣）。
-    每路徑抽樣 n 筆損益累加成權益，量：最終資金、最大連敗、最大回撤、是否破產。
+    每路徑抽 T 筆損益（有放回）累加成權益，量：最終資金、最大連敗、最大回撤、是否破產。
+
+    T 怎麼定（t_low>0 時啟用「部署總筆數」口徑，見 monte_carlo 的說明）：
+      歷史筆數 n >= t_low → 每條路徑先隨機抽一個 T ∈ [t_low, t_high]；
+      n < t_low          → T = n（全部交易納入），不硬灌到區間、避免虛增筆數。
+    t_low <= 0 → T = n（舊行為，抽樣筆數等於歷史筆數）。
     """
     np.random.seed(seed)
     n = len(pnl)
@@ -27,13 +32,17 @@ def _mc_core(pnl, n_sims, init_cash, ruin_level, seed):
     max_dds = np.empty(n_sims)        # 每路徑最大回撤（比例）
     ruin = 0
     for s in range(n_sims):
+        if t_low <= 0 or n < t_low:
+            draws = n
+        else:
+            draws = np.random.randint(t_low, t_high + 1)
         equity = init_cash
         peak = init_cash
         mdd = 0.0
         cur = 0
         mx = 0
         hit = False
-        for _ in range(n):
+        for _ in range(draws):
             x = pnl[np.random.randint(0, n)]
             if x < 0.0:
                 cur += 1
@@ -94,11 +103,18 @@ def yearly_performance(trades: pd.DataFrame) -> pd.DataFrame:
 
 
 def monte_carlo(trades: pd.DataFrame, initial_cash: float = 100_000,
-                n_sims: int = 10_000, ruin_ratio: float = 0.5, seed: int = 42) -> dict:
+                n_sims: int = 10_000, ruin_ratio: float = 0.5, seed: int = 42,
+                t_low: int = 0, t_high: int = 0) -> dict:
     """
-    對每筆 real_pnl 做 bootstrap 蒙地卡羅：每次模擬抽樣 len(trades) 筆損益累加成權益曲線。
-    逐路徑迴圈（numba，省記憶體；舊版 n_sims×n 大矩陣在大 N 會 OOM）。
+    對每筆 real_pnl 做 bootstrap 蒙地卡羅，逐路徑累加成權益曲線（numba 省記憶體；
+    舊版 n_sims×n 大矩陣在大 N 會 OOM）。
     回傳：最終資金分位、破產機率、**最大連敗 S 分布**、**最大回撤分布**。
+
+    抽樣筆數 T 兩種口徑：
+      預設（t_low=0）：T = 歷史筆數，問「同樣這批交易換個順序會怎樣」。
+      指定 t_low/t_high：T 每條路徑隨機落在 [t_low, t_high]，問「照這個策略實際部署
+        一段時間會怎樣」。文章系列用後者，區間由「每個交易日約 3–4 筆 × 回測期間
+        交易日數」定；歷史筆數不足下限時 T = 歷史筆數，不硬灌（見 _mc_core）。
     """
     pnl = trades["real_pnl"].to_numpy(dtype=np.float64)
     n = len(pnl)
@@ -106,10 +122,12 @@ def monte_carlo(trades: pd.DataFrame, initial_cash: float = 100_000,
         return {"交易次數": 0}
     ruin_level = initial_cash * ruin_ratio
     finals, streaks, max_dds, ruin = _mc_core(pnl, n_sims, float(initial_cash),
-                                              float(ruin_level), int(seed))
+                                              float(ruin_level), int(seed),
+                                              int(t_low), int(t_high))
     return {
         "模擬次數": n_sims,
-        "每次抽樣筆數": n,
+        "歷史筆數": n,
+        "每次抽樣筆數": (n if t_low <= 0 or n < t_low else f"{t_low:,}~{t_high:,}"),
         "最終資金_中位": round(float(np.median(finals)), 0),
         "最終資金_平均": round(float(finals.mean()), 0),
         "最終資金_P5": round(float(np.percentile(finals, 5)), 0),

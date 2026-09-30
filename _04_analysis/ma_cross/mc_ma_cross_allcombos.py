@@ -5,13 +5,13 @@
 再餵 _04 analyze_vbt.monte_carlo（bootstrap 10,000 次）量 最大連敗 S / 最大回撤 / 破產率。
 資料只載一次。輸出 result/mc/ma_cross_mc.csv + 終端表。
 
-執行：python _04_analysis/mc_ma_cross_allcombos.py
+執行：python _04_analysis/ma_cross/mc_ma_cross_allcombos.py
 """
 import glob
 import os
 import sys
 
-_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _root not in sys.path:
     sys.path.insert(0, _root)
 
@@ -19,10 +19,11 @@ import pandas as pd
 
 from _03_multi_strategy.ma_cross.multi_ma_cross import MultiMACross
 # 跨策略共用的單一定義（資料品質排除集＋標準回測區間），勿在此另立第二份
+from _02_strategy.base.vbt import common
 from _02_strategy.base.vbt.common import GLITCH, DEFAULT_START, DEFAULT_END
 from _04_analysis.analyze_vbt import monte_carlo
 
-DATA = r"F:\stock-analyzer\data\stock_data"
+DATA = common.DATA_DIR
 MAS = [5, 10, 20, 50, 60, 120, 200]
 WANT = ["open", "high", "low", "close", "volume"] + [f"sma_{n}" for n in MAS]
 INIT_CASH = 1_000_000.0

@@ -6,6 +6,8 @@ vbt 策略套件 common — 各策略共用的低階工具
 欄位驗證、summary 組裝，以及標準回測區間、資料品質排除集（GLITCH）等全策略共用口徑。
 策略基底（single）以「呼叫這些函式」共用，不靠類別繼承。
 """
+import os
+
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -30,6 +32,33 @@ DEFAULT_END = "2025-12-31"
 # 全市場回測一律事前剔除、與 reference 同口徑。只排那 5 檔確定非物理價的；增資/縮表等合法公司行為
 # 造成的大跳不在此列、不誤殺。各策略檔一律 import 此單一定義，勿另立第二份。
 GLITCH = {"3591.TW", "8039.TW", "8027.TWO", "6283.TW", "3666.TWO"}
+
+# ── 路徑：單一定義，各 driver 一律 import 這裡，不要再寫死本機絕對路徑 ──────────
+# 這是公開 repo，別人 clone 下來要能跑。三個位置都可用環境變數覆寫，沒設就用 repo 內預設：
+#   STOCK_DATA_DIR  股價 parquet 全史所在目錄（預設 <repo>/stock_data）
+#   CHART_OUT_DIR   產圖腳本的輸出目錄（預設 <repo>/result/charts；result/ 不進版控）
+#   BLOG_DIR        文章對照／驗證腳本要讀的 blog 專案根目錄（沒有預設，見 require_blog_dir）
+# 作者本機把前兩個指到 repo 外的共用位置，行為與寫死時相同。
+_REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+DATA_DIR = os.environ.get("STOCK_DATA_DIR") or os.path.join(_REPO, "stock_data")
+CHART_DIR = os.environ.get("CHART_OUT_DIR") or os.path.join(_REPO, "result", "charts")
+DIVIDEND_FILE = (os.environ.get("DIVIDEND_FILE")
+                 or os.path.join(_REPO, "dividends", "dividend_actions.parquet"))
+
+
+def require_blog_dir() -> str:
+    """
+    文章對照／驗證類腳本用：要讀已發佈文章與其數據表，但**文章內容不在這個公開 repo**，
+    只有「產生那些數字的程式」在。所以不給預設值，沒設就講清楚原因而不是丟 FileNotFound。
+    """
+    d = os.environ.get("BLOG_DIR")
+    if not d:
+        raise SystemExit(
+            "這支腳本要對照已發佈的文章，請先設環境變數 BLOG_DIR 指向 blog 專案根目錄：\n"
+            "    set BLOG_DIR=D:/path/to/blog               （Windows）\n"
+            "    export BLOG_DIR=/path/to/blog                （bash）\n"
+            "文章內容不在這個公開 repo 裡，這裡只有產生那些數字的回測與驗證程式。")
+    return d
 
 
 def tw_tick_arr(prices) -> np.ndarray:

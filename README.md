@@ -130,7 +130,11 @@ vectorbt 內建投組統計。
 | `_02_strategy/ma_strategy/`、`_03_multi_strategy/ma_cross/` | [均線交叉系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=%E5%9D%87%E7%B7%9A%E4%BA%A4%E5%8F%89) |
 | `_02_strategy/kd_strategy/` | [KD 交叉系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=KD%20%E4%BA%A4%E5%8F%89) |
 | `_02_strategy/macd_strategy/` | [MACD 系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=MACD) |
-| `_04_analysis/` | [回測統計指標怎麼看：每一欄到底在說什麼](https://stockanalyzer.sailforthlab.dev/posts/2026/06/backtest-metrics-guide/)、[蒙地卡羅模擬](https://stockanalyzer.sailforthlab.dev/posts/2026/07/monte-carlo-streak-and-ruin/)、[風險與資金分配](https://stockanalyzer.sailforthlab.dev/posts/2026/07/risk-and-position-sizing/) |
+| `_04_analysis/analyze_vbt.py` | [回測統計指標怎麼看：每一欄到底在說什麼](https://stockanalyzer.sailforthlab.dev/posts/2026/06/backtest-metrics-guide/) |
+| `_04_analysis/macd/` | [MACD 系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=MACD) 的掃描、矩陣、蒙地卡羅、多股與對帳驗證 |
+| `_04_analysis/ma_cross/` | [均線交叉系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=%E5%9D%87%E7%B7%9A%E4%BA%A4%E5%8F%89) 的全組合蒙地卡羅與範例交易圖 |
+| `_04_analysis/kd/` | [KD 交叉系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=KD%20%E4%BA%A4%E5%8F%89) 的示範圖 |
+| `_04_analysis/reference/` | [蒙地卡羅模擬](https://stockanalyzer.sailforthlab.dev/posts/2026/07/monte-carlo-streak-and-ruin/)、[風險與資金分配](https://stockanalyzer.sailforthlab.dev/posts/2026/07/risk-and-position-sizing/) 等參考資料類文章的觀念圖 |
 
 其他分類：[資料處理](https://stockanalyzer.sailforthlab.dev/archives/?category=%E8%B3%87%E6%96%99%E8%99%95%E7%90%86)、[回測架構](https://stockanalyzer.sailforthlab.dev/archives/?category=%E5%9B%9E%E6%B8%AC%E6%9E%B6%E6%A7%8B)、[參考資料](https://stockanalyzer.sailforthlab.dev/archives/?category=%E5%8F%83%E8%80%83%E8%B3%87%E6%96%99)。
 
@@ -143,7 +147,7 @@ vectorbt 內建投組統計。
 | `_01_data/` | 取得股票清單、下載股價、計算技術指標 |
 | `_02_strategy/` | **單股**策略（vbt 框架 + 策略） |
 | `_03_multi_strategy/` | **多股組合**策略（同一本金、共用資金；vbt 框架） |
-| `_04_analysis/` | 回測輸出的數據分析 |
+| `_04_analysis/` | 回測輸出的數據分析，**依策略主題分資料夾**（`macd/`、`ma_cross/`、`kd/`）＋概念文用的 `reference/` |
 | `docs/` | 指標與策略條件的完整清單 |
 
 ---
@@ -201,6 +205,19 @@ res = MyStrat(split_cash=10_000).run(df, stock_id="2330.TW")
 
 ## `_04_analysis/` — 數據分析
 
+一篇文章往往要跑十幾到上百個變體、再把結果整理成表，這些「跑數字 → 整理成文章」的程式都放這裡，
+**依策略主題分資料夾**，跟 `_02_strategy/<策略>/`、`_03_multi_strategy/<策略>/` 的分法一致：
+
+| 路徑 | 內容 |
+|---|---|
+| `analyze_vbt.py` | 跨策略共用的分析層（不屬任何主題） |
+| `macd/` | MACD 系列：掃描執行層、出場替換全表、拼裝矩陣、蒙地卡羅、多股三種買入排序＋隨機基準線、對 0050 的總結，以及對帳與文章數字驗證 |
+| `ma_cross/` | 均線交叉系列：全組合蒙地卡羅、逐筆交易抽樣、範例交易圖 |
+| `kd/` | KD 交叉系列的示範圖 |
+| `reference/` | 不屬單一策略的概念文用圖（指標字典、蒙地卡羅、資金分配） |
+
+各主題下的 `charts/` 是**產文章配圖的一次性腳本**（`_draw_*.py`），不是給人 import 的模組。
+
 - **`analyze_vbt.py`** — 吃 `VbtSingleStrategy.run()` 的輸出（trades / summary）：
   - `hold_days_stats(trades)`：持有天數分布
   - `yearly_performance(trades)`：依買入年份的勝率 / 損益
@@ -214,6 +231,12 @@ res = MyStrat(split_cash=10_000).run(df, stock_id="2330.TW")
 
 ```bash
 pip install -r requirements.txt
+
+# 0.（選用）指定資料與輸出位置；不設就用 repo 內的預設目錄
+#    STOCK_DATA_DIR  股價 parquet 全史所在目錄（預設 <repo>/stock_data）
+#    CHART_OUT_DIR   產圖腳本的輸出目錄（預設 <repo>/result/charts）
+#    BLOG_DIR        只有「對照已發佈文章」的驗證腳本需要，指向 blog 專案根目錄
+export STOCK_DATA_DIR=/path/to/stock_data
 
 # 1. 取得最新股票清單
 python _01_data/fetch_stock_list.py
