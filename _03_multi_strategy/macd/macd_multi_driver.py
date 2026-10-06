@@ -18,11 +18,10 @@ S 取自 MACD 系列第十篇蒙地卡羅那張表的已發佈數字（見下方
 （`run_panel`）換優先序，否則每抽一次都要重掃全市場。
 
 執行：
-    python _04_analysis/macd/macd_multi_driver.py [--random-runs 1000] [--limit N]
+    python _03_multi_strategy/macd/macd_multi_driver.py [--random-runs 1000] [--limit N]
 輸出：result/macd_multi/macd_multi_result.csv ＋ 終端表。
 """
 import argparse
-import glob
 import os
 import sys
 import time
@@ -33,7 +32,6 @@ if _root not in sys.path:
 
 import numpy as np
 import pandas as pd
-import pyarrow.parquet as pq
 
 from _02_strategy.base.vbt import common
 from _02_strategy.base.vbt.common import DEFAULT_END, DEFAULT_START, GLITCH
@@ -45,7 +43,7 @@ INIT_CASH = 1_000_000.0
 FLOOR = 0.80
 PCT_MIN_INVEST = 10_000.0        # 固定比例投入的每筆下限
 SEED0 = 20260929                 # 隨機排序的種子起點；固定住才能重現同一批抽樣
-OUT = os.path.join(_root, "_02_strategy", "macd_strategy", "result", "macd_multi")
+OUT = common.result_dir("macd_strategy", "macd_multi")
 
 # S＝最大連敗 P95，取自第十篇蒙地卡羅表（已發佈）
 S_BY_STRATEGY = {
@@ -68,27 +66,12 @@ def units(s: int):
 
 def load_all(limit=None):
     """
-    讀全市場，每檔只留 WANT 那幾欄。
+    讀全市場，每檔只留 WANT 那幾欄、裁到標準區間。
 
-    欄位清單走 parquet 的 metadata（`ParquetFile.schema_arrow.names`），**不要為了看欄位
-    先整檔讀一次再丟掉**——2,258 次多餘的整檔讀取會把 pyarrow 的記憶體池撐得很大，
-    而那些 buffer 不會馬上還給系統（實測父進程 commit 衝到 20 GB 以上，子進程還沒開始跑
-    就把系統的 commit 額度用光）。
+    走 `common.load_market`（欄位清單讀 parquet metadata，不整檔讀；原因見該函式說明）。
     """
-    data = {}
-    for f in sorted(glob.glob(os.path.join(DATA, "*.parquet"))):
-        sid = os.path.splitext(os.path.basename(f))[0]
-        if sid in GLITCH:
-            continue
-        names = pq.ParquetFile(f).schema_arrow.names
-        df = pd.read_parquet(f, columns=[c for c in WANT if c in names])
-        df = df.loc[DEFAULT_START:DEFAULT_END]
-        if len(df) < 2:
-            continue
-        data[sid] = df
-        if limit and len(data) >= limit:
-            break
-    return data
+    return common.load_market(DATA, columns=WANT, start=DEFAULT_START, end=DEFAULT_END,
+                              limit=limit, exclude=GLITCH, min_rows=2)
 
 
 def prio_panels(data, close_panel):

@@ -38,12 +38,132 @@ GLITCH = {"3591.TW", "8039.TW", "8027.TWO", "6283.TW", "3666.TWO"}
 #   STOCK_DATA_DIR  股價 parquet 全史所在目錄（預設 <repo>/stock_data）
 #   CHART_OUT_DIR   產圖腳本的輸出目錄（預設 <repo>/result/charts；result/ 不進版控）
 #   BLOG_DIR        文章對照／驗證腳本要讀的 blog 專案根目錄（沒有預設，見 require_blog_dir）
+#   DIVIDEND_FILE   含息計算用的配息表（預設 <repo>/dividends/dividend_actions.parquet，見 require_dividend_file）
 # 作者本機把前兩個指到 repo 外的共用位置，行為與寫死時相同。
 _REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 DATA_DIR = os.environ.get("STOCK_DATA_DIR") or os.path.join(_REPO, "stock_data")
 CHART_DIR = os.environ.get("CHART_OUT_DIR") or os.path.join(_REPO, "result", "charts")
 DIVIDEND_FILE = (os.environ.get("DIVIDEND_FILE")
                  or os.path.join(_REPO, "dividends", "dividend_actions.parquet"))
+
+
+def iter_market(folder: str = None, columns=None, start=None, end=None,
+                limit: int = None, exclude=GLITCH, min_rows: int = 1):
+    """
+    逐檔產出 (stock_id, df)，預設排除 GLITCH。KD／MACD／MA 共用的全市場讀檔。
+
+    單股走 `batch.run_folder(exclude=GLITCH)` 已經有共用讀檔；多股這邊原本是各 driver
+    各寫一份，排除與否、讀不了的檔要不要記錄都不一致，所以收成這一份。
+    要邊讀邊加工（例：算完指標才留下）用這支，記憶體只壓一檔原始資料；
+    要整包 dict 用 `load_market`。
+
+    columns：只讀這些欄（檔案裡沒有的略過）；None＝整檔。欄位清單走 parquet 的
+      metadata，**不要為了看欄位先整檔讀一次**——2,258 次多餘的整檔讀取會把 pyarrow
+      的記憶體池撐到 20 GB 以上（macd 多股 driver 實測），子進程還沒開跑就用光 commit 額度。
+    start／end：有給才裁切（含兩端）；不給就回傳全史，讓指標暖身吃得到 2002 以前的資料。
+    limit：產出成功的檔數上限（冒煙測試用）。
+    min_rows：裁切後少於這個筆數的檔不收（例：算報酬至少要 2 根）。
+    讀不了的檔不中斷整批，但會印出清單，不靜默跳過。
+    資料夾裡一個 parquet 都沒有就直接報錯——沒設 STOCK_DATA_DIR 時預設目錄是空的，
+    不擋的話下游會拿 0 檔「正常」跑完。
+    """
+    import glob
+    import pyarrow.parquet as pq
+
+    folder = folder or DATA_DIR
+    if not os.path.isdir(folder):
+        raise NotADirectoryError(f"找不到資料夾: {folder}")
+    paths = sorted(glob.glob(os.path.join(folder, "*.parquet")))
+    if not paths:
+        raise FileNotFoundError(
+            f"資料夾裡沒有任何 parquet：{folder}\n"
+            "請設環境變數 STOCK_DATA_DIR 指向股價 parquet 全史所在目錄。")
+    exclude = set(exclude or ())
+    failed = []
+    n_yield = 0
+    for path in paths:
+        sid = os.path.splitext(os.path.basename(path))[0]
+        if sid in exclude:
+            continue
+        try:
+            use = None
+            if columns is not None:
+                names = pq.ParquetFile(path).schema_arrow.names
+                use = [c for c in columns if c in names]
+            df = pd.read_parquet(path, columns=use).sort_index()
+        except Exception as exc:  # 單檔壞掉不拖垮整批，但要留下紀錄
+            failed.append((sid, str(exc)))
+            continue
+        if start is not None or end is not None:
+            df = df.loc[start:end]
+        if len(df) < min_rows:
+            continue
+        yield sid, df
+        n_yield += 1
+        if limit and n_yield >= limit:
+            break
+    if failed:
+        print(f"⚠ iter_market：{len(failed)} 檔讀取失敗已略過：{failed[:10]}"
+              f"{' …' if len(failed) > 10 else ''}", flush=True)
+
+
+def load_market(folder: str = None, columns=None, start=None, end=None,
+                limit: int = None, exclude=GLITCH, min_rows: int = 1) -> dict:
+    """多股用：讀整個資料夾的 parquet 成 {stock_id: df}。參數與行為同 `iter_market`。"""
+    return dict(iter_market(folder, columns=columns, start=start, end=end,
+                            limit=limit, exclude=exclude, min_rows=min_rows))
+
+
+def result_dir(strategy_pkg: str, task: str) -> str:
+    """
+    分析層 driver 的輸出目錄：`_02_strategy/<strategy_pkg>/result/<task>/`（不進版控）。
+
+    輸出刻意落在策略自己的 result/ 底下，與單股優化流程的 result/<策略>/opt{N} 同一棵樹，
+    而不是 driver 所在的 _04_analysis；各 driver 原本各自手拼這條路徑，收成這一支。
+    只回傳路徑、不建立目錄（寫檔前由呼叫端 makedirs）。
+    """
+    return os.path.join(_REPO, "_02_strategy", strategy_pkg, "result", task)
+
+
+def require_dividend_file() -> str:
+    """
+    含息計算用：回傳配息表路徑。股利資料不在這個公開 repo，預設位置通常不存在，
+    找不到就講清楚要設哪個環境變數，而不是丟一個看不出原因的 FileNotFound。
+    """
+    if not os.path.isfile(DIVIDEND_FILE):
+        raise SystemExit(
+            f"找不到配息表：{DIVIDEND_FILE}\n"
+            "請設環境變數 DIVIDEND_FILE 指向 dividend_actions.parquet。")
+    return DIVIDEND_FILE
+
+
+def chinese_font():
+    """
+    畫圖用的中文字型（matplotlib FontProperties）。
+
+    原本 12 支畫圖腳本寫死 C:/Windows/Fonts/msjh.ttc，非 Windows 一跑就壞；
+    改成依序找 微軟正黑體 → Noto CJK 系列，都找不到才退回預設字型並印警告（中文會變方塊）。
+    """
+    from matplotlib import font_manager
+
+    candidates = [
+        "C:/Windows/Fonts/msjh.ttc",
+        "/System/Library/Fonts/PingFang.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return font_manager.FontProperties(fname=path)
+    for name in ("Microsoft JhengHei", "Noto Sans CJK TC", "Noto Sans TC", "PingFang TC"):
+        try:
+            found = font_manager.findfont(name, fallback_to_default=False)
+        except ValueError:
+            continue
+        return font_manager.FontProperties(fname=found)
+    print("⚠ chinese_font：找不到中文字型，圖上的中文會顯示成方塊；"
+          "請安裝 Noto Sans CJK 或微軟正黑體。", flush=True)
+    return font_manager.FontProperties()
 
 
 def require_blog_dir() -> str:

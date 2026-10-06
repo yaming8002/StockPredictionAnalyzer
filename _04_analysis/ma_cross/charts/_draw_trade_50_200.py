@@ -12,12 +12,11 @@ import os
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib import font_manager
 import pandas as pd
 
 DATA = common.DATA_DIR
 OUT = common.CHART_DIR
-_fp = font_manager.FontProperties(fname="C:/Windows/Fonts/msjh.ttc")
+_fp = common.chinese_font()
 plt.rcParams["axes.unicode_minus"] = False
 UP, DOWN = "#d62728", "#2ca02c"
 

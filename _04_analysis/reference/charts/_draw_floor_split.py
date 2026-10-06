@@ -20,11 +20,10 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib import font_manager
 
 OUT = common.CHART_DIR
 os.makedirs(OUT, exist_ok=True)
-_fp = font_manager.FontProperties(fname="C:/Windows/Fonts/msjh.ttc")
+_fp = common.chinese_font()
 plt.rcParams["axes.unicode_minus"] = False
 
 P, WIN, LOSS, S = 0.35, 2.0, 1.0, 15

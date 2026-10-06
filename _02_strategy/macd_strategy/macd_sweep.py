@@ -22,7 +22,7 @@ if _root not in sys.path:
 import numpy as np
 import pandas as pd
 
-from _02_strategy.base.vbt import batch, common
+from _02_strategy.base.vbt import common
 from _02_strategy.base.vbt.common import DEFAULT_END, DEFAULT_START, GLITCH
 from _02_strategy.macd_strategy.macd_variants import MacdVariant
 
@@ -33,24 +33,16 @@ def prepare(folder: str = DATA, limit: int = None, start: str = DEFAULT_START,
             end: str = DEFAULT_END) -> dict:
     """讀全市場、算好所有變體會用到的欄位；回傳 {stock_id: df}。"""
     prep = MacdVariant()
-    files = batch.list_parquet(folder)
+    # 讀檔走 common 共用讀檔；逐檔讀、逐檔備妥，記憶體同時只壓一檔原始資料
     data = {}
-    for path in files:
-        sid = os.path.splitext(os.path.basename(path))[0]
-        if sid in GLITCH:
-            continue
-        df = pd.read_parquet(path).sort_index()
-        df = df.loc[(df.index >= pd.Timestamp(start)) & (df.index <= pd.Timestamp(end))]
-        if len(df) < 2:
-            continue
+    for sid, df in common.iter_market(folder, start=start, end=end, limit=limit,
+                                      exclude=GLITCH, min_rows=2):
         common.ensure_columns(df)
         df = prep.add_columns(df.copy())
         prep._ensure_zigzag(df)          # 頂頂低用
         prep._ensure_supertrend(df)      # 超級趨勢出場用
         prep._ensure_psar(df)            # SAR 出場用
         data[sid] = df
-        if limit and len(data) >= limit:
-            break
     return data
 
 

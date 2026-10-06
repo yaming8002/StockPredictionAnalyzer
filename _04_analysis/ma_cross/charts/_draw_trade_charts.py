@@ -18,14 +18,13 @@ import os
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib import font_manager
 import pandas as pd
 
 DATA = common.DATA_DIR
 OUT = common.CHART_DIR
 
 # 中文字型（微軟正黑）
-_fp = font_manager.FontProperties(fname="C:/Windows/Fonts/msjh.ttc")
+_fp = common.chinese_font()
 plt.rcParams["axes.unicode_minus"] = False
 
 UP = "#d62728"     # 台股紅＝漲

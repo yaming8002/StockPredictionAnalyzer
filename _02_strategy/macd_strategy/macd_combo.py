@@ -16,7 +16,7 @@ MACD（十）：拼裝整合矩陣（3 基礎 × 5 進場 × 5 出場 ＝ 75 組
 
 出場一律用**取代**接法（原生出場整條拿掉），與（九）篇替換版同口徑。
 
-執行：python _04_analysis/macd/macd_combo.py [--limit 300]
+執行：python _02_strategy/macd_strategy/macd_combo.py [--limit 300]
 """
 import argparse
 import os
@@ -27,11 +27,12 @@ _root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _root not in sys.path:
     sys.path.insert(0, _root)
 
+from _02_strategy.base.vbt import common
 from _02_strategy.macd_strategy.macd_variants import (NAME_BASE, NAME_EXIT,
                                                       NAME_FILTER)
-from _04_analysis.macd.macd_sweep import prepare, run_variant, spec_rows
+from _02_strategy.macd_strategy.macd_sweep import prepare, run_variant, spec_rows
 
-OUT = os.path.join(_root, "_02_strategy", "macd_strategy", "result", "macd_combo")
+OUT = common.result_dir("macd_strategy", "macd_combo")
 BASES = ["cross", "zero", "div"]
 # 依三母體平均獲利因子排序取前五；基本版（無濾網）不進矩陣
 FILTERS = ["high250", "align", "adx25", "ma200", "rsi"]

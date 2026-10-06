@@ -17,7 +17,7 @@ MACD（九）：十條出場全部改成「當唯一出場」的替換版全表
 （未平倉率 9~19%，其餘九條最高只有 3.82%）。這兩條照跑、但不納入比較，文章的替換版
 因此是**八條**不是十條；跑它們的目的是留下未平倉率當排除依據。
 
-執行：python _04_analysis/macd/macd_exit_replace.py [--limit 300]
+執行：python _02_strategy/macd_strategy/macd_exit_replace.py [--limit 300]
 """
 import argparse
 import os
@@ -28,10 +28,11 @@ _root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _root not in sys.path:
     sys.path.insert(0, _root)
 
+from _02_strategy.base.vbt import common
 from _02_strategy.macd_strategy.macd_variants import NAME_BASE, NAME_EXIT
-from _04_analysis.macd.macd_sweep import prepare, run_variant, spec_rows
+from _02_strategy.macd_strategy.macd_sweep import prepare, run_variant, spec_rows
 
-OUT = os.path.join(_root, "_02_strategy", "macd_strategy", "result", "macd_exit_replace")
+OUT = common.result_dir("macd_strategy", "macd_exit_replace")
 BASES = ["cross", "zero", "div"]
 # 原生出場擺第一個當基準線
 EXITS = ["native", "ma200", "supertrend", "psar", "lowerhigh", "donchian",

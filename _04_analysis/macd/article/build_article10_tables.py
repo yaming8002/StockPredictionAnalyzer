@@ -6,13 +6,13 @@
 
 執行：
     PYTHONUTF8=1 PYTHONIOENCODING=utf-8 F:/stock-analyzer/.venv/Scripts/python.exe \
-        _04_analysis/macd/build_article10_tables.py
+        _04_analysis/macd/article/build_article10_tables.py
 """
 
 import os
 import sys
 
-_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if _root not in sys.path:
     sys.path.insert(0, _root)
 from _02_strategy.base.vbt import common  # noqa: E402

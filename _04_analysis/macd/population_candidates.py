@@ -31,8 +31,7 @@ import os
 
 import pandas as pd
 
-RESULT = (_root + "/_02_strategy/"
-          "macd_strategy/result/single_macd")
+RESULT = common.result_dir("macd_strategy", "single_macd")
 
 # 母體 → （四）篇矩陣裡對應的那一格（與 verify_article9.py 的對應一致）
 BASE_COMBO = {

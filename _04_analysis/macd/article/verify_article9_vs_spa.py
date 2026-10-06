@@ -9,7 +9,7 @@
 
 比對對象：
   文章 = `blog/site/content/posts/macd-exit-pure.md` 表二的「替換出場規則」與「未平倉」兩欄
-  SPA  = `_04_analysis/macd_exit_replace.py` 的輸出 CSV
+  SPA  = `_02_strategy/macd_strategy/macd_exit_replace.py` 的輸出 CSV
 
 容許值：獲利因子 0.005、未平倉率 0.1 個百分點。兩邊的下單股數算法有極小差異
 （見 SPA `verify_multi_macd.py` 的說明），不會逐位元相同；但若時點或規則寫錯，
@@ -17,20 +17,20 @@
 
 執行：
     PYTHONUTF8=1 PYTHONIOENCODING=utf-8 F:/stock-analyzer/.venv/Scripts/python.exe \
-        _04_analysis/macd/verify_article9_vs_spa.py
+        _04_analysis/macd/article/verify_article9_vs_spa.py
 """
 import os
 import sys
 
-_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if _root not in sys.path:
     sys.path.insert(0, _root)
 from _02_strategy.base.vbt import common  # noqa: E402
 
 import pandas as pd
 
-CSV = os.path.join(_root, "_02_strategy", "macd_strategy",
-                   "result", "macd_exit_replace", "macd_exit_replace.csv")
+CSV = os.path.join(common.result_dir("macd_strategy", "macd_exit_replace"),
+                   "macd_exit_replace.csv")
 TOL_PF, TOL_UNCLOSED = 0.005, 0.1
 
 # 文章表二（替換出場規則欄、未平倉欄）；(母體, 出場) -> (獲利因子, 未平倉%)
@@ -64,7 +64,7 @@ WANT = {
 
 def main():
     if not os.path.exists(CSV):
-        raise SystemExit(f"找不到 SPA 的輸出：{CSV}\n先跑 _04_analysis/macd_exit_replace.py")
+        raise SystemExit(f"找不到 SPA 的輸出：{CSV}\n先跑 _02_strategy/macd_strategy/macd_exit_replace.py")
     df = pd.read_csv(CSV)
     got = {(r["母體"], r["出場"]): (float(r["獲利因子"]), float(r["未平倉%"]))
            for _, r in df.iterrows()}

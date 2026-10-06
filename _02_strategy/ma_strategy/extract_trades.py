@@ -10,24 +10,20 @@ _root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _root not in sys.path:
     sys.path.insert(0, _root)
 from _02_strategy.base.vbt import common  # noqa: E402
-import glob
+from _02_strategy.base.vbt.common import DEFAULT_END, DEFAULT_START, GLITCH  # noqa: E402
 import numpy as np
 import pandas as pd
 
 DATA = common.DATA_DIR
-GLITCH = {"3591.TW", "8039.TW", "8027.TWO", "6283.TW", "3666.TWO"}
 SHORT, LONG = "sma_60", "sma_200"
 MIN_LOT = 1000 * 1000        # 近 5 日均量 > 1000 張（＝100 萬股）
-START, END = "2001-01-01", "2025-12-31"
 
 rows = []
-for path in sorted(glob.glob(os.path.join(DATA, "*.parquet"))):
-    sid = os.path.basename(path)[:-8]
-    if sid in GLITCH:
-        continue
-    df = pd.read_parquet(path).sort_index()
-    df = df.loc[START:END]
-    if len(df) < 250 or SHORT not in df.columns:
+market = common.load_market(DATA, columns=["open", "volume", SHORT, LONG],
+                            start=DEFAULT_START, end=DEFAULT_END, exclude=GLITCH,
+                            min_rows=250)
+for sid, df in market.items():
+    if SHORT not in df.columns:
         continue
     s, l = df[SHORT], df[LONG]
     golden = (s > l) & (s.shift(1) <= l.shift(1))
@@ -53,7 +49,7 @@ for path in sorted(glob.glob(os.path.join(DATA, "*.parquet"))):
 t = pd.DataFrame(rows, columns=["stock", "buy", "sell", "buy_px", "sell_px", "ret", "hold"])
 # 輸出落在 repo 內的 result/（不進版控），不要寫到執行環境的暫存目錄——
 # 那種路徑換一場就不存在，等於沒存。
-OUT = os.path.join(_root, "_02_strategy", "ma_strategy", "result", "ma_cross")
+OUT = common.result_dir("ma_strategy", "ma_cross")
 os.makedirs(OUT, exist_ok=True)
 out_path = os.path.join(OUT, "ma_60_200_trades.csv")
 t.to_csv(out_path, index=False, encoding="utf-8-sig")

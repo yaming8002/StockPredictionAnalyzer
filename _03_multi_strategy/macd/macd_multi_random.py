@@ -26,7 +26,7 @@ RAM，同時開著 Android Studio／WSL2／Chrome）**4 個子進程可以、6 �
 （`--restart` 強制從頭跑）。中途掛掉不必整輪重來。
 
 執行：
-    python _04_analysis/macd/macd_multi_random.py [--runs 1000] [--workers 6] [--limit N]
+    python _03_multi_strategy/macd/macd_multi_random.py [--runs 1000] [--workers 6] [--limit N]
 輸出：result/macd_multi/macd_multi_random.csv（每格跑完即更新）
 """
 import argparse
@@ -53,7 +53,7 @@ vbt.settings["caching"]["enabled"] = False
 
 from _02_strategy.base.vbt import common
 from _03_multi_strategy.macd.multi_macd import STRATEGIES, MultiMACD
-from _04_analysis.macd.macd_multi_driver import (INIT_CASH, OUT, PCT_MIN_INVEST,
+from _03_multi_strategy.macd.macd_multi_driver import (INIT_CASH, OUT, PCT_MIN_INVEST,
                                             SEED0, S_BY_STRATEGY, load_all,
                                             units)
 

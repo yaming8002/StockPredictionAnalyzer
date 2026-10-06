@@ -12,13 +12,13 @@
 
 執行：
     PYTHONUTF8=1 PYTHONIOENCODING=utf-8 F:/stock-analyzer/.venv/Scripts/python.exe \
-        _04_analysis/macd/verify_article9.py
+        _04_analysis/macd/article/verify_article9.py
 """
 
 import os
 import sys
 
-_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if _root not in sys.path:
     sys.path.insert(0, _root)
 from _02_strategy.base.vbt import common  # noqa: E402
@@ -29,8 +29,7 @@ import sys
 import pandas as pd
 
 POSTS = os.path.join(common.require_blog_dir(), "site", "content", "posts")
-R = (_root + "/_02_strategy/macd_strategy/"
-     "result/single_macd")
+R = common.result_dir("macd_strategy", "single_macd")
 p = pd.read_csv(R + "/_exit_pure_risk.csv")
 rep = pd.read_csv(os.path.join(common.require_blog_dir(), "reference", "macd",
                                "data", "macd_exit_replace_all.csv"))

@@ -129,9 +129,9 @@ vectorbt 內建投組統計。
 | `_03_multi_strategy/base/vbt/` | [回測引擎 vectorbt（三）多檔股票共用一筆資金](https://stockanalyzer.sailforthlab.dev/posts/2026/07/vbt-multi-framework/) |
 | `_02_strategy/ma_strategy/`、`_03_multi_strategy/ma_cross/` | [均線交叉系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=%E5%9D%87%E7%B7%9A%E4%BA%A4%E5%8F%89) |
 | `_02_strategy/kd_strategy/` | [KD 交叉系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=KD%20%E4%BA%A4%E5%8F%89) |
-| `_02_strategy/macd_strategy/` | [MACD 系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=MACD) |
+| `_02_strategy/macd_strategy/`、`_03_multi_strategy/macd/` | [MACD 系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=MACD) 的單股掃描、矩陣、多股回測與對帳驗證 |
 | `_04_analysis/analyze_vbt.py` | [回測統計指標怎麼看：每一欄到底在說什麼](https://stockanalyzer.sailforthlab.dev/posts/2026/06/backtest-metrics-guide/) |
-| `_04_analysis/macd/` | [MACD 系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=MACD) 的掃描、矩陣、蒙地卡羅、多股與對帳驗證 |
+| `_04_analysis/macd/` | [MACD 系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=MACD) 的蒙地卡羅、對 0050 的總結、文章出表與數字驗證 |
 | `_04_analysis/ma_cross/` | [均線交叉系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=%E5%9D%87%E7%B7%9A%E4%BA%A4%E5%8F%89) 的全組合蒙地卡羅與範例交易圖 |
 | `_04_analysis/kd/` | [KD 交叉系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=KD%20%E4%BA%A4%E5%8F%89) 的示範圖 |
 | `_04_analysis/reference/` | [蒙地卡羅模擬](https://stockanalyzer.sailforthlab.dev/posts/2026/07/monte-carlo-streak-and-ruin/)、[風險與資金分配](https://stockanalyzer.sailforthlab.dev/posts/2026/07/risk-and-position-sizing/) 等參考資料類文章的觀念圖 |
@@ -145,9 +145,12 @@ vectorbt 內建投組統計。
 | 路徑 | 用途 |
 |---|---|
 | `_01_data/` | 取得股票清單、下載股價、計算技術指標 |
-| `_02_strategy/` | **單股**策略（vbt 框架 + 策略） |
-| `_03_multi_strategy/` | **多股組合**策略（同一本金、共用資金；vbt 框架） |
-| `_04_analysis/` | 回測輸出的數據分析，**依策略主題分資料夾**（`macd/`、`ma_cross/`、`kd/`）＋概念文用的 `reference/` |
+| `_02_strategy/` | **單股回測**：vbt 框架、策略，以及跑單股全市場回測的腳本 |
+| `_03_multi_strategy/` | **多股回測**：同一本金、共用資金的 vbt 框架、策略，以及跑多股回測的腳本 |
+| `_04_analysis/` | **分析**：讀回測結果做統計、蒙地卡羅、跟 0050 比、出文章表格與配圖；**不跑回測**。依策略主題分資料夾，另有 0050 基準線 `benchmark/` 與概念文用的 `reference/` |
+
+分層的判斷依據是「這支程式在做什麼」：跑回測的放 `_02`（單股）或 `_03`（多股），讀回測結果再加工的放 `_04`。
+需要「先回測、再分析」的流程拆成兩段：回測段把逐筆交易或權益曲線存成 parquet，分析段讀檔計算。
 | `docs/` | 指標與策略條件的完整清單 |
 
 ---
@@ -173,16 +176,24 @@ vectorbt 內建投組統計。
 把 vectorbt 包成「繼承基底、只覆寫買賣條件」的開發手感。
 
 - **`base/vbt/`** — vbt 策略套件（框架）
-  - `common.py`：台股 tick 進位、精確費用重建（手續費 min 20 + 賣方證交稅）、summary 組裝。
+  - `common.py`：台股 tick 進位、精確費用重建（手續費 min 20 + 賣方證交稅）、summary 組裝；
+    以及跨策略共用的單一定義——標準區間、GLITCH 排除集、資料路徑、全市場讀檔（`load_market`／`iter_market`）、
+    輸出目錄（`result_dir`）、畫圖用中文字型（`chinese_font`）。
   - `single.py`：`VbtSingleStrategy` 基底。子類**只覆寫** `add_columns` / `buy_signal` / `sell_signal`（可選 `exec_price` / `build_signals`），引擎 / 費用 / 後處理由基底處理。
 - **`ma_strategy/`** — 均線相關策略
   - `ma_cross_strategy.py`：雙均線交叉（2 日確認），`MACross_20_50` / `MACross_50_200`。
   - `single_ma_strategy.py`：單一均線突破（上穿買、下穿賣），附「測試資料中所有 MA 期數」的分析。
+  - `extract_trades.py`：撈出 MA 60/200 交叉的全部逐筆交易（挑文章案例用）。
 - **`kd_strategy/`** — KD 相關策略
   - `single_kd_strategy.py`：KD 交叉（黃金/死亡交叉、超買超賣區），以「註解切換」管理各種優化。
 - **`macd_strategy/`** — MACD 相關策略
   - `single_macd_strategy.py`：MACD 三個本質不同的進場基礎（交叉／零軸／背離），
     外加九條進場濾網與十條出場方案，全部以「註解切換」管理（見檔頭說明）。
+  - `macd_variants.py`：變體參數化子類（條件式沿用註解切換行原文，改由類別屬性選；掃描用）。
+  - `macd_sweep.py`：掃描共用執行層（讀檔＋算指標只做一次，所有變體共用）。
+  - `macd_exit_replace.py`、`macd_combo.py`：出場替換全表、拼裝矩陣。
+  - `macd_mc_trades.py`：蒙地卡羅那五組的逐筆交易（回測段；分析段在 `_04_analysis/macd/macd_montecarlo.py`）。
+  - `verify_exit_switches.py`：驗證策略檔的出場切換可用。
 
 寫新策略範式：
 ```python
@@ -202,21 +213,38 @@ res = MyStrat(split_cash=10_000).run(df, stock_id="2330.TW")
 
 - **`base/vbt/multi.py`** — `VbtMultiStrategy` 基底：單一共用現金池（`cash_sharing`），現金不足時擋單，可覆寫 `priority` 自訂買入優先序。台股費用沿用 `_02` 的 `common`（依賴方向 `_03 → _02`）。
 - 輸入 `data_dict = {stock_id: df}`，輸出 `{trades, summary, failed_orders_approx}`。
+- **`ma_cross/`**
+  - `multi_ma_cross.py`：多股雙均線交叉（類別＋執行入口）。
+  - `ma_cross_allcombos_trades.py`：全 21 組合的多股逐筆交易（回測段；蒙地卡羅在 `_04_analysis/ma_cross/mc_ma_cross_allcombos.py`）。
+- **`kd/`**
+  - `multi_kd.py`：多股 KD 類別。
+- **`macd/`**
+  - `multi_macd.py`：多股 MACD 類別（五組交易策略）。
+  - `macd_multi_driver.py`：五組 × 兩種投法 × 低價／高價／流動性三種買入排序。
+  - `macd_multi_random.py`：隨機買入順序基準線（1,000 次，多進程）。
+  - `macd_conclusion_equity.py`：結論篇用的 2015 起權益曲線（回測段；跟 0050 比在 `_04_analysis/macd/macd_multi_conclusion.py`）。
+  - `verify_multi_macd.py`：多股引擎的正確性錨點（關掉資金限制後必須等於單股回測）。
 
 ## `_04_analysis/` — 數據分析
 
-一篇文章往往要跑十幾到上百個變體、再把結果整理成表，這些「跑數字 → 整理成文章」的程式都放這裡，
-**依策略主題分資料夾**，跟 `_02_strategy/<策略>/`、`_03_multi_strategy/<策略>/` 的分法一致：
+讀 `_02`／`_03` 回測跑出來的結果再加工，**這一層不跑回測**。依策略主題分資料夾：
 
 | 路徑 | 內容 |
 |---|---|
 | `analyze_vbt.py` | 跨策略共用的分析層（不屬任何主題） |
-| `macd/` | MACD 系列：掃描執行層、出場替換全表、拼裝矩陣、蒙地卡羅、多股三種買入排序＋隨機基準線、對 0050 的總結，以及對帳與文章數字驗證 |
-| `ma_cross/` | 均線交叉系列：全組合蒙地卡羅、逐筆交易抽樣、範例交易圖 |
-| `kd/` | KD 交叉系列的示範圖 |
-| `reference/` | 不屬單一策略的概念文用圖（指標字典、蒙地卡羅、資金分配） |
+| `benchmark/` | 0050 買進持有（含息）基準線：各系列結論篇的最終比較對象，含對照區間與錨點驗算 |
+| `macd/` | MACD：五組交易策略的蒙地卡羅、對 0050 的總結、母體候選表 |
+| `macd/article/` | MACD 文章專用：從結果 CSV 產文章表格、把文章數字對回 CSV 驗證（需設 `BLOG_DIR`） |
+| `ma_cross/` | 均線交叉：全 21 組合的蒙地卡羅 |
+| `ma_cross/charts/`、`kd/charts/` | 各系列的範例交易圖 |
+| `reference/charts/` | 不屬單一策略的概念文用圖（指標字典、蒙地卡羅、資金分配） |
 
 各主題下的 `charts/` 是**產文章配圖的一次性腳本**（`_draw_*.py`），不是給人 import 的模組。
+
+**輸出落點**：回測與分析的結果都寫到 `_02_strategy/<策略>/result/<任務>/`（由 `common.result_dir` 統一決定，
+不進版控），跟單股優化流程的 `result/` 同一棵樹；配圖則寫到 `CHART_OUT_DIR`。
+**兩段式的分析要先跑回測段**（例：先 `_02_strategy/macd_strategy/macd_mc_trades.py`，再 `_04_analysis/macd/macd_montecarlo.py`），
+分析段找不到回測輸出會直接提示要先跑哪一支。
 
 - **`analyze_vbt.py`** — 吃 `VbtSingleStrategy.run()` 的輸出（trades / summary）：
   - `hold_days_stats(trades)`：持有天數分布
@@ -236,6 +264,7 @@ pip install -r requirements.txt
 #    STOCK_DATA_DIR  股價 parquet 全史所在目錄（預設 <repo>/stock_data）
 #    CHART_OUT_DIR   產圖腳本的輸出目錄（預設 <repo>/result/charts）
 #    BLOG_DIR        只有「對照已發佈文章」的驗證腳本需要，指向 blog 專案根目錄
+#    DIVIDEND_FILE   只有含息計算（0050 基準線）需要，指向 dividend_actions.parquet
 export STOCK_DATA_DIR=/path/to/stock_data
 
 # 1. 取得最新股票清單

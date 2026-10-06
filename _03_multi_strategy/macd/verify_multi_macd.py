@@ -13,7 +13,7 @@
 所以單股那邊也要設成同一條（EXIT="ma200"、EXIT_MODE="replace"）。
 
 執行（先用 300 檔快檢，再視需要跑全市場）：
-    python _04_analysis/macd/verify_multi_macd.py [--limit 300]
+    python _03_multi_strategy/macd/verify_multi_macd.py [--limit 300]
 """
 import argparse
 import os
@@ -27,8 +27,8 @@ import pandas as pd
 
 from _02_strategy.base.vbt import common
 from _03_multi_strategy.macd.multi_macd import STRATEGIES, MultiMACD
-from _04_analysis.macd.macd_multi_driver import load_all
-from _04_analysis.macd.macd_sweep import prepare, variant_trades
+from _03_multi_strategy.macd.macd_multi_driver import load_all
+from _02_strategy.macd_strategy.macd_sweep import prepare, variant_trades
 
 UNLIMITED = 1e15          # 本金給到永遠花不完＝關掉資金限制
 PER_TRADE = 10_000.0      # 每筆投入；與單股基底的 split_cash 預設一致

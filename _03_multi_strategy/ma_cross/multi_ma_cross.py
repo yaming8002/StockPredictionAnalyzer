@@ -8,10 +8,10 @@
 進場：短均線上穿長均線（黃金交叉）。出場：短均線下穿長均線（死亡交叉）。
 
 執行（全市場、共用 100 萬、percent_floor、每筆佔已實現權益 1/30、下限 1 萬）：
-  python _03_multi_strategy/ma_cross/multi_ma_cross.py <資料夾> --short 50 --long 200
+  python _03_multi_strategy/ma_cross/multi_ma_cross.py [資料夾] --short 50 --long 200
+資料夾省略時用 common.DATA_DIR（環境變數 STOCK_DATA_DIR）。
 """
 import argparse
-import glob
 import os
 import sys
 
@@ -23,11 +23,10 @@ import numpy as np
 import pandas as pd
 
 from _01_data.indicators_trend import calculate_sma
+from _02_strategy.base.vbt import common
 # 跨策略共用的單一定義（資料品質排除集＋標準回測區間），勿在此另立第二份
-from _02_strategy.base.vbt.common import GLITCH, DEFAULT_START, DEFAULT_END
+from _02_strategy.base.vbt.common import GLITCH, DEFAULT_START, DEFAULT_END, load_market
 from _03_multi_strategy.base.vbt.multi import VbtMultiStrategy
-
-DEFAULT_DATA = r"F:\stock-analyzer\data\stock_data"
 
 
 def _ma(df: pd.DataFrame, window: int) -> pd.Series:
@@ -107,31 +106,14 @@ class MultiMACross(VbtMultiStrategy):
 
 
 def load_data(folder: str, limit: int = None) -> dict:
-    """讀資料夾 parquet 成 {stock_id: df}；只取需要的欄位、剔除 glitch 壞檔。"""
-    files = sorted(glob.glob(os.path.join(folder, "*.parquet")))
-    data = {}
+    """讀資料夾 parquet 成 {stock_id: df}；只取需要的欄位、剔除 glitch 壞檔（走 common 共用讀檔）。"""
     want = ["open", "high", "low", "close", "volume", "sma_50", "sma_200"]
-    for f in files:
-        sid = os.path.splitext(os.path.basename(f))[0]
-        if sid in GLITCH:
-            continue
-        try:
-            cols = pd.read_parquet(f, columns=None).columns
-            use = [c for c in want if c in cols]
-            df = pd.read_parquet(f, columns=use)
-        except Exception:
-            continue
-        if df.empty:
-            continue
-        data[sid] = df
-        if limit and len(data) >= limit:
-            break
-    return data
+    return load_market(folder, columns=want, limit=limit, exclude=GLITCH)
 
 
 def main(argv) -> int:
     p = argparse.ArgumentParser(description="多股雙均線交叉（共用資金）回測")
-    p.add_argument("folder", nargs="?", default=DEFAULT_DATA, help="OHLCV parquet 資料夾")
+    p.add_argument("folder", nargs="?", default=common.DATA_DIR, help="OHLCV parquet 資料夾")
     p.add_argument("--short", type=int, default=50)
     p.add_argument("--long", type=int, default=200)
     p.add_argument("--mode", choices=("percent_floor", "fixed"), default="percent_floor")

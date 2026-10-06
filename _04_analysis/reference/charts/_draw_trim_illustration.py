@@ -17,11 +17,10 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib import font_manager
 
 OUT = common.CHART_DIR   # 草稿用；發佈時再 copy 到 content/charts/metrics/
 os.makedirs(OUT, exist_ok=True)
-_fp = font_manager.FontProperties(fname="C:/Windows/Fonts/msjh.ttc")
+_fp = common.chinese_font()
 plt.rcParams["axes.unicode_minus"] = False
 
 rng = np.random.default_rng(20260619)

@@ -14,7 +14,7 @@
 
 執行：
     PYTHONUTF8=1 PYTHONIOENCODING=utf-8 F:/stock-analyzer/.venv/Scripts/python.exe \
-        _04_analysis/macd/verify_exit_switches.py
+        _02_strategy/macd_strategy/verify_exit_switches.py
 """
 
 import os

@@ -12,14 +12,21 @@
 
 執行：
     PYTHONUTF8=1 PYTHONIOENCODING=utf-8 F:/stock-analyzer/.venv/Scripts/python.exe \
-        _04_analysis/macd/build_article11_tables.py [--mode 定額|比例]
+        _04_analysis/macd/article/build_article11_tables.py [--mode 定額|比例]
 """
 import argparse
 import os
+import sys
+
+_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 
 import pandas as pd
 
-SPA = r"F:\stock-analyzer\StockPredictionAnalyzer\_02_strategy\macd_strategy\result\macd_multi"
+from _02_strategy.base.vbt import common  # noqa: E402
+
+SPA = common.result_dir("macd_strategy", "macd_multi")
 DET = os.path.join(SPA, "macd_multi_result.csv")
 RND = os.path.join(SPA, "macd_multi_random.csv")
 
