@@ -5,7 +5,7 @@
 輸出到 stdout，用標記分段（TABLE:交叉 / TABLE:零軸 / TABLE:背離 / RANK3 / RANK2 / STATS）。
 
 執行：
-    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 F:/stock-analyzer/.venv/Scripts/python.exe \
+    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python \
         _04_analysis/macd/article/build_article10_tables.py
 """
 

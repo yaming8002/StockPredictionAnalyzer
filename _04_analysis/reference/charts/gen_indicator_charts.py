@@ -5,7 +5,7 @@
 可重跑：資料更新後重新執行即可刷新圖。
 
 執行：
-  PYTHONUTF8=1 PYTHONIOENCODING=utf-8 F:/stock-analyzer/.venv/Scripts/python.exe _04_analysis/reference/charts/gen_indicator_charts.py
+  PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python _04_analysis/reference/charts/gen_indicator_charts.py
 """
 import os
 import sys

@@ -6,7 +6,7 @@ VbtMultiStrategy 對驗測試
 優先序語意正確、數字可信。涵蓋：percent_floor 已實現權益基準、fixed、真擋單、下限、整股、
 sell-先於-buy、優先序，以及隨機多股情境。
 
-執行：F:/stock-analyzer/.venv/Scripts/python.exe -m pytest tests/test_multi_vbt.py -q
+執行：python -m pytest tests/test_multi_vbt.py -q
 """
 import math
 import os

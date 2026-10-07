@@ -13,7 +13,7 @@
            頂頂低本來就在取代名單，兩種設定下必須逐格相同。
 
 執行：
-    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 F:/stock-analyzer/.venv/Scripts/python.exe \
+    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python \
         _02_strategy/macd_strategy/verify_exit_switches.py
 """
 

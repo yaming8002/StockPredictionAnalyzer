@@ -16,7 +16,7 @@
 差距會是 0.1 以上、不會卡在容許值內。
 
 執行：
-    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 F:/stock-analyzer/.venv/Scripts/python.exe \
+    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python \
         _04_analysis/macd/article/verify_article9_vs_spa.py
 """
 import os

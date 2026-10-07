@@ -11,7 +11,7 @@
 表 1（被排除的兩條）仍對 SPA 那一輪的 `_exit_pure_risk.csv`，末欄取自（八）篇、不在比對範圍。
 
 執行：
-    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 F:/stock-analyzer/.venv/Scripts/python.exe \
+    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python \
         _04_analysis/macd/article/verify_article9.py
 """
 

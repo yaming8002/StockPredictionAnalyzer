@@ -8,7 +8,7 @@
 - 「替換」與「未平倉」兩欄＝本篇同一批跑出來的（macd_exit_replace_all.csv）。
 
 執行：
-    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 F:/stock-analyzer/.venv/Scripts/python.exe \
+    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python \
         _04_analysis/macd/article/build_article9_table.py
 """
 

@@ -11,7 +11,7 @@
 這樣讀者一眼看得出「這個排序是真本事，還是還不如亂買」。
 
 執行：
-    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 F:/stock-analyzer/.venv/Scripts/python.exe \
+    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python \
         _04_analysis/macd/article/build_article11_tables.py [--mode 定額|比例]
 """
 import argparse

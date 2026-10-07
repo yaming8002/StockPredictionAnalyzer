@@ -16,7 +16,7 @@ MACD（十）拼裝整合篇的前置：從已跑完的 CSV 拉出四個母體�
 取代版是附錄（九篇），不納入候選比較。
 
 執行：
-    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 F:/stock-analyzer/.venv/Scripts/python.exe \
+    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python \
         _04_analysis/macd/population_candidates.py
 """
 
