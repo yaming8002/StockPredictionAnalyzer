@@ -132,7 +132,7 @@ vectorbt 內建投組統計。
 | `_02_strategy/macd_strategy/`、`_03_multi_strategy/macd/` | [MACD 系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=MACD) 的單股掃描、矩陣、多股回測與對帳驗證 |
 | `_04_analysis/analyze_vbt.py` | [回測統計指標怎麼看：每一欄到底在說什麼](https://stockanalyzer.sailforthlab.dev/posts/2026/06/backtest-metrics-guide/) |
 | `_04_analysis/macd/` | [MACD 系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=MACD) 的蒙地卡羅、對 0050 的總結、文章出表與數字驗證 |
-| `_04_analysis/ma_cross/` | [均線交叉系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=%E5%9D%87%E7%B7%9A%E4%BA%A4%E5%8F%89) 的全組合蒙地卡羅與範例交易圖 |
+| `_04_analysis/ma_cross/` | [均線交叉系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=%E5%9D%87%E7%B7%9A%E4%BA%A4%E5%8F%89) 的範例交易圖 |
 | `_04_analysis/kd/` | [KD 交叉系列](https://stockanalyzer.sailforthlab.dev/archives/?subcategory=KD%20%E4%BA%A4%E5%8F%89) 的示範圖 |
 | `_04_analysis/reference/` | [蒙地卡羅模擬](https://stockanalyzer.sailforthlab.dev/posts/2026/07/monte-carlo-streak-and-ruin/)、[風險與資金分配](https://stockanalyzer.sailforthlab.dev/posts/2026/07/risk-and-position-sizing/) 等參考資料類文章的觀念圖 |
 
@@ -215,7 +215,6 @@ res = MyStrat(split_cash=10_000).run(df, stock_id="2330.TW")
 - 輸入 `data_dict = {stock_id: df}`，輸出 `{trades, summary, failed_orders_approx}`。
 - **`ma_cross/`**
   - `multi_ma_cross.py`：多股雙均線交叉（類別＋執行入口）。
-  - `ma_cross_allcombos_trades.py`：全 21 組合的多股逐筆交易（回測段；蒙地卡羅在 `_04_analysis/ma_cross/mc_ma_cross_allcombos.py`）。
 - **`kd/`**
   - `multi_kd.py`：多股 KD 類別。
 - **`macd/`**
@@ -235,7 +234,6 @@ res = MyStrat(split_cash=10_000).run(df, stock_id="2330.TW")
 | `benchmark/` | 0050 買進持有（含息）基準線：各系列結論篇的最終比較對象，含對照區間與錨點驗算 |
 | `macd/` | MACD：五組交易策略的蒙地卡羅、對 0050 的總結、母體候選表 |
 | `macd/article/` | MACD 文章專用：從結果 CSV 產文章表格、把文章數字對回 CSV 驗證（需設 `BLOG_DIR`） |
-| `ma_cross/` | 均線交叉：全 21 組合的蒙地卡羅 |
 | `ma_cross/charts/`、`kd/charts/` | 各系列的範例交易圖 |
 | `reference/charts/` | 不屬單一策略的概念文用圖（指標字典、蒙地卡羅、資金分配） |
 
