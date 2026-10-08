@@ -270,26 +270,27 @@ def mc_selection(passed, full):
     return sorted(picks)
 
 
-def body_claims(mx, full, mc, passed, base):
-    """回傳 [(說明, 由 CSV 重算出的那段字, 文章裡應出現的那段字)]。"""
+def frac_above(passed, above, col, key):
+    """某一群通過門檻的格子裡，高於基本版的「格數/總格數」。"""
+    mask = passed[col] == key
+    return f"{int(above[mask].sum())}/{int(mask.sum())}"
+
+
+def all_or_frac(frac, text):
+    """全部過關時回傳文章「全部高於」的寫法；沒全過就回傳分數本身（比對會失敗並印出實際值）。"""
+    won, total = frac.split("/")
+    return text.format(n=total) if won == total else frac
+
+
+def claims_matrix(mx, full, passed, base):
+    """「三個要先講清楚的讀法」與「結果：三張矩陣」兩段的統計句。"""
     thin = mx[(mx["交易次數"] > 0) & (mx["交易次數"] < THRESH)]
-    ranked = passed.sort_values("獲利因子", ascending=False).reset_index(drop=True)
-    ma = passed[passed["出場"] == "跌破MA200"]
-    above = passed.apply(lambda r: r["獲利因子"] > base[r["母體"]], axis=1)
     z250 = mx[(mx["母體"] == "零軸") & (mx["進場濾網"] == "創250日新高")]
     hold0 = lookup(full, "交叉", "無濾網", "原生出場")["平均持有天"]
     hold1 = lookup(full, "交叉", "無濾網", "跌破MA200")["平均持有天"]
-    fv = filter_vs_none(passed, full)
-    exit_pass = {e: f"{int(above[passed['出場'] == e].sum())}/{int((passed['出場'] == e).sum())}"
-                 for e in EXIT_MAP.values()}
-    pop_pass = {p: f"{int(above[passed['母體'] == p].sum())}/{int((passed['母體'] == p).sum())}"
-                for p in ("交叉", "零軸", "背離")}
-    top = mx[mx["交易次數"] > 0].sort_values("獲利因子", ascending=False).iloc[0]
-    div_rank = ranked[(ranked["母體"] == "背離") & (ranked["交易次數"] >= T_LOW)].index[0] + 1
-    div_adx = lookup(mx, "背離", "ADX>25", "跌破MA200")
-    m = {mc_key(r["組合"]): r for _, r in mc.iterrows()}
-    none_mc = m[("交叉", "無濾網", "跌破MA200")]["報酬% 中位"]
-    gain = {f: m[("交叉", f, "跌破MA200")]["報酬% 中位"] for f in ("均線多頭排列", "ADX>25")}
+    above = passed.apply(lambda r: r["獲利因子"] > base[r["母體"]], axis=1)
+    pop = {p: frac_above(passed, above, "母體", p) for p in ("交叉", "零軸", "背離")}
+    n_combo = ["零", "一", "二", "三", "四"][thin.groupby(["母體", "進場濾網"]).ngroups]
     return [
         ("三個基本版", f"{base['交叉']:.4f}、{base['零軸']:.4f}、{base['背離']:.4f}",
          "0.9869、1.2392、1.0294"),
@@ -300,26 +301,32 @@ def body_claims(mx, full, mc, passed, base):
          f"{z250['獲利因子'].min():.2f} 到 {z250['獲利因子'].max():.2f}", "1.52 到 2.18"),
         ("零軸×創250 的交易次數範圍",
          f"{z250['交易次數'].min()} 到 {z250['交易次數'].max()} 筆", "635 到 673 筆"),
-        ("不及格格子來自幾個搭配",
-         f"{len(thin)} 格只來自{['零', '一', '二', '三', '四'][thin.groupby(['母體', '進場濾網']).ngroups]}個搭配",
-         "15 格只來自三個搭配"),
-        ("三基礎高於基本版的格數",
-         f"黃金交叉 {pop_pass['交叉'].split('/')[1]} 格全部高於基本版" if pop_pass["交叉"].split("/")[0]
-         == pop_pass["交叉"].split("/")[1] else pop_pass["交叉"], "黃金交叉 25 格全部高於基本版"),
-        ("零軸／背離高於基本版", f"零軸上穿 {pop_pass['零軸']}、純背離 {pop_pass['背離']}",
+        ("不及格格子來自幾個搭配", f"{len(thin)} 格只來自{n_combo}個搭配", "15 格只來自三個搭配"),
+        ("黃金交叉高於基本版的格數", all_or_frac(pop["交叉"], "黃金交叉 {n} 格全部高於基本版"),
+         "黃金交叉 25 格全部高於基本版"),
+        ("零軸／背離高於基本版", f"零軸上穿 {pop['零軸']}、純背離 {pop['背離']}",
          "零軸上穿 11/15、純背離 12/15"),
+    ]
+
+
+def claims_ranking(full, passed, base):
+    """「排行：排除樣本不足之後」與「重點整理」裡跟排行有關的統計句。"""
+    ranked = passed.sort_values("獲利因子", ascending=False).reset_index(drop=True)
+    ma = passed[passed["出場"] == "跌破MA200"]
+    above = passed.apply(lambda r: r["獲利因子"] > base[r["母體"]], axis=1)
+    ex = {e: frac_above(passed, above, "出場", e) for e in EXIT_MAP.values()}
+    fv = filter_vs_none(passed, full)
+    n_ma_top11 = int((ranked["出場"].iloc[:11] == "跌破MA200").sum())
+    return [
         ("通過門檻格數", f"{len(passed)} 個通過門檻的格子", "55 個通過門檻的格子"),
-        ("前 11 名幾名是跌破年線",
-         f"前 11 名裡剛好有 {int((ranked['出場'].iloc[:11] == '跌破MA200').sum())} 名是它",
-         "前 11 名裡剛好有 10 名是它"),
-        ("跌破年線過關格數", f"通過門檻的 {exit_pass['跌破MA200'].split('/')[1]} 格全部高於基本版"
-         if exit_pass["跌破MA200"].split("/")[0] == exit_pass["跌破MA200"].split("/")[1]
-         else exit_pass["跌破MA200"], "通過門檻的 11 格全部高於基本版"),
+        ("前 11 名幾名是跌破年線", f"前 11 名裡剛好有 {n_ma_top11} 名是它", "前 11 名裡剛好有 10 名是它"),
+        ("跌破年線過關格數", all_or_frac(ex["跌破MA200"], "通過門檻的 {n} 格全部高於基本版"),
+         "通過門檻的 11 格全部高於基本版"),
         ("跌破年線平均", f"平均獲利因子 {ma['獲利因子'].mean():.4f}、平均抱 {ma['平均持有天'].mean():.1f} 天",
          "平均獲利因子 1.4709、平均抱 145.9 天"),
         ("其餘四條出場過關格數",
-         f"抱滿 60 天 {exit_pass['抱滿60天']}、超級趨勢 {exit_pass['Supertrend翻空']}、"
-         f"波段高點走低 {exit_pass['頂頂低']}、跌破二十日低 {exit_pass['跌破20日低']}",
+         f"抱滿 60 天 {ex['抱滿60天']}、超級趨勢 {ex['Supertrend翻空']}、"
+         f"波段高點走低 {ex['頂頂低']}、跌破二十日低 {ex['跌破20日低']}",
          "抱滿 60 天 10/11、超級趨勢 10/11、波段高點走低 9/11、跌破二十日低 8/11"),
         ("五條出場平均勝率", fmt_win_by_exit(passed),
          "抱滿 60 天 45.64%、波段高點走低 39.56%、超級趨勢 38.83%、跌破年線 36.42%、跌破二十日低 30.93%"),
@@ -336,18 +343,38 @@ def body_claims(mx, full, mc, passed, base):
          f"第一名只有 {ranked.loc[0, '交易次數']:,} 筆、剛過門檻，第二名 {ranked.loc[1, '交易次數']:,} 筆、"
          f"第四名 {ranked.loc[3, '交易次數']:,} 筆",
          "第一名只有 6,837 筆、剛過門檻，第二名 20,747 筆、第四名 23,922 筆"),
+    ]
+
+
+def claims_mc_selection(mx, passed):
+    """「蒙地卡羅壓測」裡關於抽樣區間與「哪幾組被挑中／被擋下」的統計句。"""
+    ranked = passed.sort_values("獲利因子", ascending=False).reset_index(drop=True)
+    top = mx[mx["交易次數"] > 0].sort_values("獲利因子", ascending=False).iloc[0]
+    div_rank = ranked[(ranked["母體"] == "背離") & (ranked["交易次數"] >= T_LOW)].index[0] + 1
+    div_adx = lookup(mx, "背離", "ADX>25", "跌破MA200")
+    blocked = ranked.loc[0, "交易次數"] < T_LOW and ranked.loc[2, "交易次數"] < T_LOW
+    return [
         ("抽樣區間", f"約 {THRESH:,} 個交易日，一次完整部署落在 {T_LOW:,}～{T_HIGH:,} 筆",
          "約 5,949 個交易日，一次完整部署落在 17,847～23,796 筆"),
         ("被抽樣下限擋下的兩組",
          f"排行第 1（{ranked.loc[0, '交易次數']:,} 筆）與第 3（{ranked.loc[2, '交易次數']:,} 筆）"
-         if ranked.loc[0, "交易次數"] < T_LOW and ranked.loc[2, "交易次數"] < T_LOW else "未被擋下",
-         "排行第 1（6,837 筆）與第 3（6,298 筆）"),
+         if blocked else "未被擋下", "排行第 1（6,837 筆）與第 3（6,298 筆）"),
         ("純背離的代表",
          f"排行第 {div_rank} 的 RSI&lt;50 且上升（{ranked.loc[div_rank - 1, '交易次數']:,} 筆），"
          f"它排名更前的那組（ADX&gt;25）只有 {div_adx['交易次數']:,} 筆",
          "排行第 15 的 RSI&lt;50 且上升（18,601 筆），它排名更前的那組（ADX&gt;25）只有 16,416 筆"),
         ("全表最高那格", f"全表第一的 {top['獲利因子']:.4f} 只成交 {top['交易次數']} 筆",
          "全表第一的 2.1834 只成交 635 筆"),
+    ]
+
+
+def claims_mc_results(mc):
+    """「蒙地卡羅壓測」裡關於報酬、回撤、連敗的統計句。"""
+    m = {mc_key(r["組合"]): r for _, r in mc.iterrows()}
+    none_mc = m[("交叉", "無濾網", "跌破MA200")]["報酬% 中位"]
+    gain = {f: m[("交叉", f, "跌破MA200")]["報酬% 中位"] for f in ("均線多頭排列", "ADX>25")}
+    longest, best_win = mc.loc[mc["最大連敗 P95"].idxmax()], mc.loc[mc["勝率%"].idxmax()]
+    return [
         ("濾網的報酬差距",
          f"是 +{none_mc:.0f}%，加均線多頭排列變 +{gain['均線多頭排列']:.0f}%"
          f"（+{(gain['均線多頭排列'] / none_mc - 1) * 100:.0f}%）、加 ADX&gt;25 變 +{gain['ADX>25']:.0f}%"
@@ -361,14 +388,21 @@ def body_claims(mx, full, mc, passed, base):
          f"回撤 P95 從 {mc['最大回撤% P95'].min():.1f}% 到 {mc['最大回撤% P95'].max():.1f}%、"
          f"最大連敗 P95 從 {mc['最大連敗 P95'].min()} 筆到 {mc['最大連敗 P95'].max()} 筆",
          "回撤 P95 從 6.9% 到 11.4%、最大連敗 P95 從 19 筆到 43 筆"),
-        ("連敗最長那組", f"勝率只有 {mc.loc[mc['最大連敗 P95'].idxmax(), '勝率%']:.2f}%，"
-         f"靠 {mc.loc[mc['最大連敗 P95'].idxmax(), '賺賠比']:.2f} 的賺賠比",
+        ("連敗最長那組", f"勝率只有 {longest['勝率%']:.2f}%，靠 {longest['賺賠比']:.2f} 的賺賠比",
          "勝率只有 23.48%，靠 5.51 的賺賠比"),
-        ("勝率最高那組", f"勝率 {mc['勝率%'].max():.2f}% 是五組最高、連敗最短"
-         f"（{mc.loc[mc['勝率%'].idxmax(), '最大連敗 P95']} 筆），但賺賠比只有 "
-         f"{mc.loc[mc['勝率%'].idxmax(), '賺賠比']:.2f}",
+        ("勝率最高那組", f"勝率 {best_win['勝率%']:.2f}% 是五組最高、連敗最短"
+         f"（{best_win['最大連敗 P95']} 筆），但賺賠比只有 {best_win['賺賠比']:.2f}",
          "勝率 46.90% 是五組最高、連敗最短（19 筆），但賺賠比只有 1.61"),
     ]
+
+
+def body_claims(mx, full, mc, passed, base):
+    """
+    正文統計句，依文章段落分四組；回傳 [(說明, 由 CSV 重算出的那段字, 文章裡應出現的那段字)]。
+    文章某一段改版時，只要改對應的那一組。
+    """
+    return (claims_matrix(mx, full, passed, base) + claims_ranking(full, passed, base)
+            + claims_mc_selection(mx, passed) + claims_mc_results(mc))
 
 
 def main():
