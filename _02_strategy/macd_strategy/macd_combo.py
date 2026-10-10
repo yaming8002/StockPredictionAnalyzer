@@ -16,7 +16,14 @@ MACD（十）：拼裝整合矩陣（3 基礎 × 5 進場 × 5 出場 ＝ 75 組
 
 出場一律用**取代**接法（原生出場整條拿掉），與（九）篇替換版同口徑。
 
-執行：python _02_strategy/macd_strategy/macd_combo.py [--limit 300]
+**2026-10-08 起改跑 3 × 7 × 6 ＝ 126 組**（第十篇實際用的那張 6x6 寬表）：兩軸各補上基準
+（無濾網、原生出場），進場另補「跳空」（排序第六、文章附錄有列）。矩陣與排行仍只取上面的前五；
+基準列給「同列差距」與 MC 挑組用。原本這張表是 blog 私有 driver 跑的，這裡收回 SPA，欄名與名稱
+沿用那份 CSV（母體＝交叉／零軸／背離；出場＝跌破MA200、Supertrend翻空、跌破20日低、頂頂低…），
+文章的出表與驗證程式（_04_analysis/macd/article/）直接讀這份。
+
+執行：python _02_strategy/macd_strategy/macd_combo.py [--limit 300] [--out 目錄]
+輸出：result/macd_combo/macd_combo_6x6.csv
 """
 import argparse
 import os
@@ -38,33 +45,41 @@ BASES = ["cross", "zero", "div"]
 FILTERS = ["high250", "align", "adx25", "ma200", "rsi"]
 # 同上，原生出場不進矩陣
 EXITS = ["ma200", "supertrend", "time60", "donchian", "lowerhigh"]
+# 寬表多跑的：兩軸基準＋排序第六的跳空（見檔頭）
+GRID_FILTERS = ["none", "ma200", "gap", "align", "adx25", "rsi", "high250"]
+GRID_EXITS = ["native", "ma200", "supertrend", "time60", "donchian", "lowerhigh"]
+# 寬表沿用的名稱（第十篇出表／驗證程式認這套）
+POP_NAME = {"cross": "交叉", "zero": "零軸", "div": "背離"}
+EXIT_NAME = {"native": "原生出場", "ma200": "跌破MA200", "supertrend": "Supertrend翻空",
+             "time60": "抱滿60天", "donchian": "跌破20日低", "lowerhigh": "頂頂低"}
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None, help="只跑前 N 檔（冒煙用）")
+    ap.add_argument("--out", default=OUT, help="輸出目錄（冒煙用，避免蓋掉正式結果）")
     a = ap.parse_args()
 
     t0 = time.time()
     data = prepare(limit=a.limit)
-    n = len(BASES) * len(FILTERS) * len(EXITS)
+    n = len(BASES) * len(GRID_FILTERS) * len(GRID_EXITS)
     print(f"載入並備妥 {len(data)} 檔｜{n} 組｜{time.time() - t0:.0f} 秒", flush=True)
 
     out = []
     for base in BASES:
-        for f in FILTERS:
-            for ex in EXITS:
+        for f in GRID_FILTERS:
+            for ex in GRID_EXITS:
                 t = time.time()
                 s = run_variant(data, base, f, ex, "replace")
-                out.append(({"母體": NAME_BASE[base], "進場": NAME_FILTER[f],
-                             "出場": NAME_EXIT[ex]}, s))
+                out.append(({"母體": POP_NAME[base], "進場濾網": NAME_FILTER[f],
+                             "出場": EXIT_NAME[ex]}, s))
                 print(f"  {NAME_BASE[base]} × {NAME_FILTER[f]} × {NAME_EXIT[ex]}："
                       f"{s['交易次數']:,} 筆｜PF {s['獲利因子(PF)']}｜"
                       f"未平倉 {s['未平倉%']}%｜{time.time() - t:.0f} 秒", flush=True)
 
     df = spec_rows(out)
-    os.makedirs(OUT, exist_ok=True)
-    path = os.path.join(OUT, "macd_combo.csv")
+    os.makedirs(a.out, exist_ok=True)
+    path = os.path.join(a.out, "macd_combo_6x6.csv")
     df.to_csv(path, index=False, encoding="utf-8-sig")
     print(f"\n耗時 {time.time() - t0:.0f} 秒｜{len(df)} 列 → {path}")
     return 0

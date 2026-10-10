@@ -12,6 +12,10 @@
   ## 附錄：完整 75 組數據       三個基礎的完整 10 欄＋未平倉%
 開頭兩張「取前五」表的數字引用自（六）（九）篇，不在這兩份 CSV 裡，不在本檔驗證範圍。
 
+兩份 CSV 都讀 SPA 回測／分析段的產出：矩陣＝result/macd_combo/macd_combo_6x6.csv
+（_02_strategy/macd_strategy/macd_combo.py）、蒙地卡羅＝result/macd_mc/macd_montecarlo.csv
+（_04_analysis/macd/macd_montecarlo.py）。
+
 正文統計句的驗法：每一條先由 CSV 重算，再確認文章裡真的出現那段字；兩邊任何一邊變了都會報錯。
 
 執行：
@@ -23,6 +27,7 @@ import io
 import os
 import re
 import sys
+from decimal import ROUND_HALF_UP, Decimal
 
 _root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if _root not in sys.path:
@@ -32,7 +37,6 @@ import pandas as pd  # noqa: E402
 
 from _02_strategy.base.vbt import common  # noqa: E402
 
-DATA = os.path.join(common.require_blog_dir(), "reference", "macd", "data")
 POST = os.path.join(common.require_blog_dir(), "site", "content", "posts", "macd-combo.md")
 
 # 文章為了好讀在名稱裡加了空格／改了說法，對回 CSV 前要還原
@@ -276,6 +280,25 @@ def frac_above(passed, above, col, key):
     return f"{int(above[mask].sum())}/{int(mask.sum())}"
 
 
+def half_up(v, nd):
+    """四捨五入到 nd 位（文章口徑）；f-string 遇到 .5 邊界會受二進位誤差影響，改走 Decimal。"""
+    return f"{Decimal(str(v)).quantize(Decimal(1).scaleb(-nd), rounding=ROUND_HALF_UP)}"
+
+
+def cross_filter_spread(passed):
+    """黃金交叉表裡「同一條濾網換不同出場」的獲利因子高低差：回傳差距最小與最大的兩條濾網。"""
+    rev = {v: k for k, v in FILTER_MAP.items()}
+    g = passed[passed["母體"] == "交叉"].groupby("進場濾網")["獲利因子"].agg(["min", "max"])
+    g["spread"] = g["max"] - g["min"]
+    lo, hi = g["spread"].idxmin(), g["spread"].idxmax()
+
+    def one(f):
+        name = rev[f].replace(">", "&gt;").replace("<", "&lt;")
+        r = g.loc[f]
+        return f"{half_up(r['spread'], 2)}（{name}，{half_up(r['min'], 2)}～{half_up(r['max'], 2)}）"
+    return f"獲利因子的高低差從 {one(lo)}到 {one(hi)}"
+
+
 def all_or_frac(frac, text):
     """全部過關時回傳文章「全部高於」的寫法；沒全過就回傳分數本身（比對會失敗並印出實際值）。"""
     won, total = frac.split("/")
@@ -293,19 +316,21 @@ def claims_matrix(mx, full, passed, base):
     n_combo = ["零", "一", "二", "三", "四"][thin.groupby(["母體", "進場濾網"]).ngroups]
     return [
         ("三個基本版", f"{base['交叉']:.4f}、{base['零軸']:.4f}、{base['背離']:.4f}",
-         "0.9869、1.2392、1.0294"),
-        ("交叉換跌破年線的持有天", f"{hold0:.2f} 天變成 {hold1:.2f} 天", "18.65 天變成 130.46 天"),
+         "0.9869、1.2388、1.0290"),
+        ("交叉換跌破年線的持有天", f"{hold0:.2f} 天變成 {hold1:.2f} 天", "18.65 天變成 128.05 天"),
         ("不過門檻的格數", f"{len(mx)} 格裡有 {len(thin)} 格沒過", "75 格裡有 15 格沒過"),
-        ("未平倉率最大值", f"最高只有 {mx['未平倉%'].max():.2f}%", "最高只有 3.83%"),
+        ("未平倉率最大值", f"最高只有 {mx['未平倉%'].max():.2f}%", "最高只有 3.79%"),
         ("零軸×創250 的獲利因子範圍",
-         f"{z250['獲利因子'].min():.2f} 到 {z250['獲利因子'].max():.2f}", "1.52 到 2.18"),
+         f"{z250['獲利因子'].min():.2f} 到 {z250['獲利因子'].max():.2f}", "1.51 到 2.20"),
         ("零軸×創250 的交易次數範圍",
-         f"{z250['交易次數'].min()} 到 {z250['交易次數'].max()} 筆", "635 到 673 筆"),
+         f"{z250['交易次數'].min()} 到 {z250['交易次數'].max()} 筆", "641 到 679 筆"),
         ("不及格格子來自幾個搭配", f"{len(thin)} 格只來自{n_combo}個搭配", "15 格只來自三個搭配"),
         ("黃金交叉高於基本版的格數", all_or_frac(pop["交叉"], "黃金交叉 {n} 格全部高於基本版"),
          "黃金交叉 25 格全部高於基本版"),
         ("零軸／背離高於基本版", f"零軸上穿 {pop['零軸']}、純背離 {pop['背離']}",
-         "零軸上穿 11/15、純背離 12/15"),
+         "零軸上穿 9/15、純背離 12/15"),
+        ("黃金交叉表同一濾網換出場的高低差", cross_filter_spread(passed),
+         "獲利因子的高低差從 0.31（收盤&gt;MA200，1.14～1.45）到 0.46（創 250 日新高，1.16～1.63）"),
     ]
 
 
@@ -319,30 +344,30 @@ def claims_ranking(full, passed, base):
     n_ma_top11 = int((ranked["出場"].iloc[:11] == "跌破MA200").sum())
     return [
         ("通過門檻格數", f"{len(passed)} 個通過門檻的格子", "55 個通過門檻的格子"),
-        ("前 11 名幾名是跌破年線", f"前 11 名裡剛好有 {n_ma_top11} 名是它", "前 11 名裡剛好有 10 名是它"),
+        ("前 11 名幾名是跌破年線", f"前 11 名裡剛好有 {n_ma_top11} 名是它", "前 11 名裡剛好有 9 名是它"),
         ("跌破年線過關格數", all_or_frac(ex["跌破MA200"], "通過門檻的 {n} 格全部高於基本版"),
          "通過門檻的 11 格全部高於基本版"),
         ("跌破年線平均", f"平均獲利因子 {ma['獲利因子'].mean():.4f}、平均抱 {ma['平均持有天'].mean():.1f} 天",
-         "平均獲利因子 1.4709、平均抱 145.9 天"),
+         "平均獲利因子 1.4659、平均抱 144.9 天"),
         ("其餘四條出場過關格數",
          f"抱滿 60 天 {ex['抱滿60天']}、超級趨勢 {ex['Supertrend翻空']}、"
          f"波段高點走低 {ex['頂頂低']}、跌破二十日低 {ex['跌破20日低']}",
-         "抱滿 60 天 10/11、超級趨勢 10/11、波段高點走低 9/11、跌破二十日低 8/11"),
+         "抱滿 60 天 9/11、超級趨勢 9/11、波段高點走低 9/11、跌破二十日低 8/11"),
         ("五條出場平均勝率", fmt_win_by_exit(passed),
-         "抱滿 60 天 45.64%、波段高點走低 39.56%、超級趨勢 38.83%、跌破年線 36.42%、跌破二十日低 30.93%"),
+         "抱滿 60 天 45.64%、波段高點走低 39.55%、超級趨勢 38.82%、跌破年線 36.36%、跌破二十日低 30.89%"),
         ("濾網勝過無濾網（排行段）",
          f"收盤&gt;MA200 勝過無濾網 {fv['收盤>MA200']} 格、ADX&gt;25 {fv['ADX>25']}、"
          f"均線多頭排列 {fv['均線多頭排列']}、創 250 日新高 {fv['創250日新高']}",
-         "收盤&gt;MA200 勝過無濾網 11/15 格、ADX&gt;25 10/15、均線多頭排列 8/10、創 250 日新高 4/5"),
+         "收盤&gt;MA200 勝過無濾網 9/15 格、ADX&gt;25 11/15、均線多頭排列 8/10、創 250 日新高 3/5"),
         ("RSI 濾網勝過無濾網", f"RSI&lt;50 且上升只有 {fv['RSI<50且上升']}", "RSI&lt;50 且上升只有 3/10"),
         ("濾網勝過無濾網（重點整理）",
          f"收盤&gt;MA200 {fv['收盤>MA200']}、ADX&gt;25 {fv['ADX>25']}、均線多頭排列 {fv['均線多頭排列']}、"
          f"創 250 日新高 {fv['創250日新高']}、RSI&lt;50 且上升 {fv['RSI<50且上升']}",
-         "收盤&gt;MA200 11/15、ADX&gt;25 10/15、均線多頭排列 8/10、創 250 日新高 4/5、RSI&lt;50 且上升 3/10"),
+         "收盤&gt;MA200 9/15、ADX&gt;25 11/15、均線多頭排列 8/10、創 250 日新高 3/5、RSI&lt;50 且上升 3/10"),
         ("排行前段的交易次數",
          f"第一名只有 {ranked.loc[0, '交易次數']:,} 筆、剛過門檻，第二名 {ranked.loc[1, '交易次數']:,} 筆、"
          f"第四名 {ranked.loc[3, '交易次數']:,} 筆",
-         "第一名只有 6,837 筆、剛過門檻，第二名 20,747 筆、第四名 23,922 筆"),
+         "第一名只有 6,989 筆、剛過門檻，第二名 24,824 筆、第四名 6,334 筆"),
     ]
 
 
@@ -351,20 +376,36 @@ def claims_mc_selection(mx, passed):
     ranked = passed.sort_values("獲利因子", ascending=False).reset_index(drop=True)
     top = mx[mx["交易次數"] > 0].sort_values("獲利因子", ascending=False).iloc[0]
     div_rank = ranked[(ranked["母體"] == "背離") & (ranked["交易次數"] >= T_LOW)].index[0] + 1
-    div_adx = lookup(mx, "背離", "ADX>25", "跌破MA200")
-    blocked = ranked.loc[0, "交易次數"] < T_LOW and ranked.loc[2, "交易次數"] < T_LOW
+    # 被擋下＝交叉／零軸各自排在該母體入選組之前、但交易次數不到抽樣下限的格子
+    # （不寫死名次，重跑後名次會動；背離另有「純背離的代表」一句交代）
+    hit = []
+    for pop, k in (("交叉", 2), ("零軸", 1)):
+        sub = ranked[ranked["母體"] == pop]
+        last_pick = sub[sub["交易次數"] >= T_LOW].index[k - 1]
+        hit += list(sub.loc[:last_pick][sub.loc[:last_pick, "交易次數"] < T_LOW].index)
+    blocked = ranked.loc[sorted(hit)]
+    blocked_txt = "與".join(f"第 {i + 1}（{r['交易次數']:,} 筆）" for i, r in blocked.iterrows())
+    # 純背離：排在入選組之前、但交易次數不到抽樣下限的全部格子（不只 ADX>25）
+    rev_f = {v: k for k, v in FILTER_MAP.items()}
+    div_sub = ranked.loc[:div_rank - 1]
+    div_blocked = div_sub[(div_sub["母體"] == "背離") & (div_sub["交易次數"] < T_LOW)]
+    n_word = ["零", "一", "兩", "三", "四", "五"][len(div_blocked)]
+    div_blocked_txt = "；".join(
+        f"第 {i + 1} 的{' ' if rev_f[r['進場濾網']][0].isascii() else ''}"   # 中英之間空一格，同文章寫法
+        f"{rev_f[r['進場濾網']].replace('>', '&gt;').replace('<', '&lt;')}，{r['交易次數']:,} 筆"
+        for i, r in div_blocked.iterrows())
     return [
         ("抽樣區間", f"約 {THRESH:,} 個交易日，一次完整部署落在 {T_LOW:,}～{T_HIGH:,} 筆",
          "約 5,949 個交易日，一次完整部署落在 17,847～23,796 筆"),
-        ("被抽樣下限擋下的兩組",
-         f"排行第 1（{ranked.loc[0, '交易次數']:,} 筆）與第 3（{ranked.loc[2, '交易次數']:,} 筆）"
-         if blocked else "未被擋下", "排行第 1（6,837 筆）與第 3（6,298 筆）"),
+        ("被抽樣下限擋下的組", f"排行{blocked_txt}" if len(blocked) else "未被擋下",
+         "排行第 1（6,989 筆）與第 4（6,334 筆）"),
         ("純背離的代表",
          f"排行第 {div_rank} 的 RSI&lt;50 且上升（{ranked.loc[div_rank - 1, '交易次數']:,} 筆），"
-         f"它排名更前的那組（ADX&gt;25）只有 {div_adx['交易次數']:,} 筆",
-         "排行第 15 的 RSI&lt;50 且上升（18,601 筆），它排名更前的那組（ADX&gt;25）只有 16,416 筆"),
+         f"排在它前面的{n_word}組純背離（{div_blocked_txt}）都沒到下限",
+         "排行第 14 的 RSI&lt;50 且上升（18,775 筆），排在它前面的兩組純背離"
+         "（第 5 的 ADX&gt;25，16,989 筆；第 13 的收盤&gt;MA200，13,689 筆）都沒到下限"),
         ("全表最高那格", f"全表第一的 {top['獲利因子']:.4f} 只成交 {top['交易次數']} 筆",
-         "全表第一的 2.1834 只成交 635 筆"),
+         "全表第一的 2.2045 只成交 641 筆"),
     ]
 
 
@@ -373,26 +414,28 @@ def claims_mc_results(mc):
     m = {mc_key(r["組合"]): r for _, r in mc.iterrows()}
     none_mc = m[("交叉", "無濾網", "跌破MA200")]["報酬% 中位"]
     gain = {f: m[("交叉", f, "跌破MA200")]["報酬% 中位"] for f in ("均線多頭排列", "ADX>25")}
+    zero_mc = m[("零軸", "收盤>MA200", "跌破MA200")]["報酬% 中位"]
+    div_mc = m[("背離", "RSI<50且上升", "跌破MA200")]["報酬% 中位"]
     longest, best_win = mc.loc[mc["最大連敗 P95"].idxmax()], mc.loc[mc["勝率%"].idxmax()]
     return [
         ("濾網的報酬差距",
          f"是 +{none_mc:.0f}%，加均線多頭排列變 +{gain['均線多頭排列']:.0f}%"
          f"（+{(gain['均線多頭排列'] / none_mc - 1) * 100:.0f}%）、加 ADX&gt;25 變 +{gain['ADX>25']:.0f}%"
          f"（+{(gain['ADX>25'] / none_mc - 1) * 100:.0f}%）",
-         "是 +616%，加均線多頭排列變 +858%（+39%）、加 ADX&gt;25 變 +827%（+34%）"),
+         "是 +600%，加均線多頭排列變 +866%（+44%）、加 ADX&gt;25 變 +859%（+43%）"),
         ("換基礎的報酬",
-         f"零軸 × 收盤&gt;MA200 +{m[('零軸', '收盤>MA200', '跌破MA200')]['報酬% 中位']:.0f}%、"
-         f"純背離 × RSI&lt;50 且上升 +{m[('背離', 'RSI<50且上升', '跌破MA200')]['報酬% 中位']:.0f}%",
-         "零軸 × 收盤&gt;MA200 +598%、純背離 × RSI&lt;50 且上升 +396%"),
+         f"零軸 × 收盤&gt;MA200 +{half_up(zero_mc, 0)}%（比對照組少 {half_up((1 - zero_mc / none_mc) * 100, 0)}%）、"
+         f"純背離 × RSI&lt;50 且上升 +{half_up(div_mc, 0)}%（少 {half_up((1 - div_mc / none_mc) * 100, 0)}%）",
+         "零軸 × 收盤&gt;MA200 +558%（比對照組少 7%）、純背離 × RSI&lt;50 且上升 +393%（少 35%）"),
         ("蒙地卡羅回撤與連敗範圍",
          f"回撤 P95 從 {mc['最大回撤% P95'].min():.1f}% 到 {mc['最大回撤% P95'].max():.1f}%、"
          f"最大連敗 P95 從 {mc['最大連敗 P95'].min()} 筆到 {mc['最大連敗 P95'].max()} 筆",
-         "回撤 P95 從 6.9% 到 11.4%、最大連敗 P95 從 19 筆到 43 筆"),
+         "回撤 P95 從 6.7% 到 11.4%、最大連敗 P95 從 19 筆到 43 筆"),
         ("連敗最長那組", f"勝率只有 {longest['勝率%']:.2f}%，靠 {longest['賺賠比']:.2f} 的賺賠比",
-         "勝率只有 23.48%，靠 5.51 的賺賠比"),
+         "勝率只有 23.29%，靠 5.38 的賺賠比"),
         ("勝率最高那組", f"勝率 {best_win['勝率%']:.2f}% 是五組最高、連敗最短"
          f"（{best_win['最大連敗 P95']} 筆），但賺賠比只有 {best_win['賺賠比']:.2f}",
-         "勝率 46.90% 是五組最高、連敗最短（19 筆），但賺賠比只有 1.61"),
+         "勝率 46.89% 是五組最高、連敗最短（19 筆），但賺賠比只有 1.61"),
     ]
 
 
@@ -406,11 +449,11 @@ def body_claims(mx, full, mc, passed, base):
 
 
 def main():
-    mx_all = pd.read_csv(os.path.join(DATA, "macd_combo_6x6.csv"))
+    mx_all = pd.read_csv(os.path.join(common.result_dir("macd_strategy", "macd_combo"), "macd_combo_6x6.csv"))
     # CSV 是 7×6 跑出來的，文章只用排序前五的兩軸，先裁掉落選的列
     mx = mx_all[mx_all["進場濾網"].isin(FILTER_MAP.values())
                 & mx_all["出場"].isin(EXIT_MAP.values())].copy()
-    mc = pd.read_csv(os.path.join(DATA, "macd_matrix_montecarlo.csv"))
+    mc = pd.read_csv(os.path.join(common.result_dir("macd_strategy", "macd_mc"), "macd_montecarlo.csv"))
     base = {p: lookup(mx_all, p, "無濾網", "原生出場")["獲利因子"] for p in ("交叉", "零軸", "背離")}
     passed = mx[mx["交易次數"] >= THRESH]
     text = io.open(POST, encoding="utf-8").read()
@@ -428,7 +471,6 @@ def main():
         ok = check(got == want, f"{name}：CSV 重算為「{got}」，本檔預期「{want}」")
         ok = check(want in text, f"{name}：文章裡找不到「{want}」") and ok
         print(f"    {'OK' if ok else 'NG'} {name}")
-    print("  （未驗：「同一條濾網換不同出場，獲利因子從 1.14 跑到 1.66」——文中沒交代取哪幾格，無法唯一重算）")
 
     print(f"\n對照 {checked} 個數值，錯誤 {len(errs)} 個")
     return 1 if errs else 0

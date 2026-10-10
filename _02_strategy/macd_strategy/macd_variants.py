@@ -14,8 +14,13 @@ MACD 變體參數化（給掃描 driver 用）
 
 三個維度：
   BASE      三個進場基礎（cross 交叉／zero 零軸／div 背離），互斥擇一。
+            另有第四個母體 mix ＝「交叉進 × 零軸出」：進場與 cross 一字不差、原生出場換成
+            DIF 下穿 0（（四）篇矩陣的總量冠軍；（五）～（八）篇的第四個母體）。
+            它不是新的進場邏輯，只是「進場 × 原生出場」的另一種配對，所以掛在 BASE 上。
   FILTER    進場濾網，疊在基礎上（AND），一次一條；"none" ＝ 不加，當基準線。
   EXIT      出場規則；"native" ＝ 各基礎的自然出場，當基準線。
+            MACD 自身的三種出場（death 死叉／zero_down DIF 下穿 0／beardiv 頂背離）也列為
+            可指定的規則，（四）篇 3×3 矩陣用「取代」把它們跟任一進場配對。
   EXIT_MODE 出場怎麼接：
               "append"  附加（主軸）：原出場留著、新規則疊上去，先觸發者算。
               "replace" 取代（附錄）：原出場整條拿掉，只用新規則。
@@ -38,7 +43,8 @@ from _02_strategy.macd_strategy.single_macd_strategy import (
     TURNOVER_MIN, VOL_MULTIPLE, SingleMacdStrategy, _scan_path_exits)
 
 # 進場基礎：顯示名稱（表格用）
-NAME_BASE = {"cross": "黃金交叉", "zero": "零軸上穿", "div": "純背離"}
+NAME_BASE = {"cross": "黃金交叉", "zero": "零軸上穿", "div": "純背離",
+             "mix": "交叉進×零軸出"}
 
 # 進場濾網：顯示名稱。"none" 是基準線，務必擺在掃描清單第一個。
 NAME_FILTER = {
@@ -54,6 +60,7 @@ NAME_EXIT = {
     "psar": "SAR翻空", "donchian": "跌破二十日低", "lowerhigh": "波段高點走低",
     "beardiv": "頂背離", "chandelier": "吊燈3ATR", "trail10": "自最高點回落10%",
     "atrstop": "固定停損2ATR", "takeprofit": "固定停利+20%", "time60": "抱滿60天",
+    "death": "死亡交叉", "zero_down": "DIF跌破0",
 }
 
 # 需要逐根掃描的出場（走 _scan_path_exits，不能寫成向量化條件）
@@ -77,7 +84,7 @@ class MacdVariant(SingleMacdStrategy):
     def buy_signal(self, df: pd.DataFrame) -> pd.Series:
         macd = df["macd"]
         base = self.BASE
-        if base == "cross":
+        if base in ("cross", "mix"):                              # mix 進場與交叉相同
             signal = df["golden"]                                 # 基礎 A 交叉
         elif base == "zero":
             signal = (macd > 0) & (macd.shift(1) <= 0)            # 基礎 B 零軸
@@ -114,9 +121,9 @@ class MacdVariant(SingleMacdStrategy):
 
     # ── 出場 ────────────────────────────────────────────────
     def _native_exit(self, df: pd.DataFrame) -> pd.Series:
-        """各基礎的自然出場：交叉／背離配死叉，零軸配 DIF 下穿 0。"""
+        """各基礎的自然出場：交叉／背離配死叉，零軸與 mix 配 DIF 下穿 0。"""
         macd = df["macd"]
-        if self.BASE == "zero":
+        if self.BASE in ("zero", "mix"):
             return (macd < 0) & (macd.shift(1) >= 0)
         return df["death"]
 
@@ -140,6 +147,11 @@ class MacdVariant(SingleMacdStrategy):
             rule = close < df["dc_low_prev"]
         elif x == "beardiv":
             rule = df["bear_divergence"]
+        elif x == "death":                                       # 矩陣用：死亡交叉
+            rule = df["death"]
+        elif x == "zero_down":                                   # 矩陣用：DIF 下穿 0
+            macd = df["macd"]
+            rule = (macd < 0) & (macd.shift(1) >= 0)
         else:
             raise ValueError(f"未知出場 {x}")
         signal = (native | rule) if self.EXIT_MODE == "append" else rule
@@ -159,7 +171,7 @@ class MacdVariant(SingleMacdStrategy):
         else:
             turn_high = np.full(len(df), np.nan)          # 其餘規則用不到，給占位陣列
         entries, exits = _scan_path_exits(
-            self.buy_signal(df).to_numpy(),
+            self.entry_signal(df).to_numpy(),
             self.sell_signal(df).to_numpy(),
             df["open"].to_numpy(dtype=np.float64),
             df["high"].to_numpy(dtype=np.float64),

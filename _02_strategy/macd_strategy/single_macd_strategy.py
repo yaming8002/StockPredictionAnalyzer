@@ -371,7 +371,7 @@ class SingleMacdStrategy(VbtSingleStrategy):
         else:
             turn_high = np.full(len(df), np.nan)          # 其餘規則用不到，給占位陣列
         entries, exits = _scan_path_exits(
-            self.buy_signal(df).to_numpy(),
+            self.entry_signal(df).to_numpy(),
             self.sell_signal(df).to_numpy(),
             df["open"].to_numpy(dtype=np.float64),
             df["high"].to_numpy(dtype=np.float64),

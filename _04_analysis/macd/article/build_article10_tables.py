@@ -20,7 +20,8 @@ import sys
 
 import pandas as pd
 
-CSV = os.path.join(common.require_blog_dir(), "reference", "macd", "data", "macd_combo_6x6.csv")
+# 讀 SPA 回測段的產出（_02_strategy/macd_strategy/macd_combo.py），不讀 blog 那份舊副本
+CSV = os.path.join(common.result_dir("macd_strategy", "macd_combo"), "macd_combo_6x6.csv")
 # 兩軸都只取「原生出場下的三母體平均」排序的前五名，依排名擺列。
 # 無濾網與原本的出場不佔格子——它們是基本版，數字沿用既有資料、寫在圖例裡當比較基礎。
 FILTER_ORDER = ["創250日新高", "均線多頭排列", "ADX>25", "收盤>MA200",

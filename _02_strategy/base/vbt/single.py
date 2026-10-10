@@ -24,6 +24,11 @@ vbt 策略套件 single — 單檔回測基底（一檔一帳戶）
     # res = {"trades": DataFrame, "summary": dict}
 
 資料載入不在本套件職責內：傳入已含 OHLCV（小寫）、DatetimeIndex 的 df。
+
+交易區間（2026-10-08 改）：**傳全史進來，用 run(start=, end=) 指定交易區間**，不要先把 df 裁到起日。
+指標在全史上算（2002 起點本來就是為了讓 2001 當暖身期），進場訊號只認區間內的判定日
+（見 entry_signal），最後才把成交裁到區間內。先裁再算會有兩個問題：起日前幾個月的 ADX／量均／
+KD／ZigZag 沒暖身；以及「起日當天短均已在長均之上」會被 shift 補 False 誤判成一次黃金交叉。
 """
 import numpy as np
 import pandas as pd
@@ -44,6 +49,7 @@ class VbtSingleStrategy:
         self.split_cash = split_cash
         self.min_invest = min_invest
         self.freq = freq
+        self._trade_start = None   # 交易區間起日；由 window_signals 設定，entry_signal 據此擋區間前的進場
 
     # ── 子類覆寫的 hook ───────────────────────────────────────
     def add_columns(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -68,20 +74,49 @@ class VbtSingleStrategy:
 
         路徑相依出場（如進場以來最高）請覆寫此函式做單檔逐根掃描；覆寫後即由你
         自行產出「成交日」訊號，基底不再代為位移（時點責任轉移到子類）。
+        覆寫時進場一律取 entry_signal（不是 buy_signal），區間前才不會帶著部位進到起日。
         """
-        entries = self.buy_signal(df).fillna(False).astype(bool).shift(1, fill_value=False)
+        entries = self.entry_signal(df).fillna(False).astype(bool).shift(1, fill_value=False)
         exits = self.sell_signal(df).fillna(False).astype(bool).shift(1, fill_value=False)
         return entries, exits
+
+    def entry_signal(self, df: pd.DataFrame) -> pd.Series:
+        """
+        buy_signal 再加交易區間閘門：判定日早於起日的進場一律不算。
+        路徑相依的逐根掃描若吃到區間前的進場，會帶著部位進到起日、壓掉區間內的新進場，
+        所以掃描型 build_signals 也要從這裡取進場，不直接呼叫 buy_signal。
+        """
+        sig = self.buy_signal(df)
+        if self._trade_start is not None:
+            sig = sig & (df.index >= pd.Timestamp(self._trade_start))
+        return sig
+
+    def window_signals(self, df: pd.DataFrame, start=None, end=None):
+        """
+        在全史 df（已 add_columns）上產生成交日訊號，再裁到交易區間。
+        回傳 (區間內 df, entries, exits)。run 與需要自己數開倉數的 driver 共用這一支。
+        """
+        self._trade_start = start
+        entries, exits = self.build_signals(df)
+        if start is None and end is None:
+            return df, entries, exits
+        keep = ((df.index >= pd.Timestamp(start or df.index.min()))
+                & (df.index <= pd.Timestamp(end or df.index.max())))
+        return df.loc[keep], entries.loc[keep], exits.loc[keep]
 
     def exec_price(self, df: pd.DataFrame) -> pd.Series:
         """成交價：預設隔日開盤（配合 build_signals 的隔日成交；tick 進位在後處理）。"""
         return df["open"]
 
     # ── 主流程 ───────────────────────────────────────────────
-    def run(self, df: pd.DataFrame, stock_id: str = "") -> dict:
+    def run(self, df: pd.DataFrame, stock_id: str = "", start=None, end=None) -> dict:
+        """df 傳全史；start／end 是交易區間（指標吃全史暖身，成交只在區間內）。"""
         common.ensure_columns(df)
         df = self.add_columns(df.copy())
-        entries, exits = self.build_signals(df)
+        df, entries, exits = self.window_signals(df, start, end)
+        if df.empty:
+            empty = self._postprocess(None, stock_id)
+            return {"trades": empty, "summary": common.summarize_trades(empty)}
         price = self.exec_price(df)
 
         # 倉位：invest_ratio → percent of cash；否則固定 split_cash 金額
@@ -108,11 +143,13 @@ class VbtSingleStrategy:
         return {"trades": records, "summary": common.summarize_trades(records)}
 
     def _postprocess(self, pf, stock_id: str) -> pd.DataFrame:
-        """取已平倉 trades → tick 進位 + 精確費用重建 → 統一欄位。"""
-        rec = pf.trades.records_readable
-        rec = rec[rec["Status"] == "Closed"].copy()
+        """取已平倉 trades → tick 進位 + 精確費用重建 → 統一欄位。pf=None 表示區間內無資料。"""
         cols = ["stock_id", "buy_date", "sell_date", "buy_price", "sell_price",
                 "qty", "buy_fee", "sell_fee", "real_pnl"]
+        if pf is None:
+            return pd.DataFrame(columns=cols)
+        rec = pf.trades.records_readable
+        rec = rec[rec["Status"] == "Closed"].copy()
         if rec.empty:
             return pd.DataFrame(columns=cols)
 

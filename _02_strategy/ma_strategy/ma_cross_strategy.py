@@ -174,7 +174,7 @@ class MACrossStrategy(VbtSingleStrategy):
         if not self.CHOCH:
             return super().build_signals(df)
 
-        entry_raw = self.buy_signal(df).to_numpy()          # 判定日進場（cross + 其他進場旗標）
+        entry_raw = self.entry_signal(df).to_numpy()        # 判定日進場（cross + 其他進場旗標；區間前不算）
         death = self.sell_signal(df).to_numpy()             # 判定日死亡交叉
         th = df["zigzag_turn_high"].to_numpy()
         n = len(df)

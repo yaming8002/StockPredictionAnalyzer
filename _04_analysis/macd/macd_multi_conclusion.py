@@ -14,6 +14,7 @@ MACD 系列結論：五組交易策略的多股回測（2015–2025）對 0050 �
     python _03_multi_strategy/macd/macd_conclusion_equity.py
     python _04_analysis/macd/macd_multi_conclusion.py
 輸出：result/macd_multi/macd_multi_conclusion.csv ＋ 終端表。
+  各列另附「<欄名>_精確」＝由權益曲線算的未四捨五入值（exact_curve；0050 列也有），文章出表從精確值一次進位。
 """
 import os
 import sys
@@ -29,7 +30,19 @@ from _03_multi_strategy.macd.macd_conclusion_equity import (EQUITY_FILE, RUNS_FI
                                                             WIN_START, equity_key)
 from _03_multi_strategy.macd.macd_multi_driver import INIT_CASH, OUT  # noqa: E402
 from _04_analysis.benchmark.benchmark_0050 import (BENCHMARK_START, bench_0050,  # noqa: E402
-                                                   curve_stats)
+                                                   curve_stats, equity_0050)
+
+EXACT = "_精確"
+
+
+def exact_curve(eq: np.ndarray, years: float) -> dict:
+    """curve_stats 的未四捨五入版（同 KD 的 kd_multi_conclusion.exact_curve；文章出表一次進位用）。"""
+    mult = eq[-1] / eq[0]
+    cagr = (mult ** (1.0 / years) - 1.0) * 100.0
+    peak = np.maximum.accumulate(eq)
+    dd = ((peak - eq) / peak).max() * 100.0
+    return {"資金倍數" + EXACT: mult, "年化報酬率%" + EXACT: cagr, "最大回撤%" + EXACT: dd,
+            "報酬回撤比" + EXACT: cagr / dd if dd > 0 else None}
 
 
 def main():
@@ -53,14 +66,16 @@ def main():
         rows.append({"交易策略": r.交易策略, "投法": r.投法, "份數": r.份數,
                      "交易次數": r.交易次數, "擋單": r.擋單, "資金倍數": mult,
                      "年化報酬率%": cagr, "最大回撤%": dd,
-                     "報酬回撤比": round(cagr / dd, 3) if dd > 0 else None})
+                     "報酬回撤比": round(cagr / dd, 3) if dd > 0 else None}
+                    | exact_curve(eq, years))
         print(f"{r.交易策略}｜{r.投法}({r.份數})：{r.交易次數:,} 筆｜擋單 {r.擋單:,}｜"
               f"×{mult}｜年化 {cagr}%｜回撤 {dd}%｜報酬回撤比 {rows[-1]['報酬回撤比']}")
 
     mult, cagr, dd = bench_0050(cal, years, INIT_CASH)
     rows.append({"交易策略": "0050 買進持有（含息）", "投法": "—", "份數": None,
                  "交易次數": 1, "擋單": 0, "資金倍數": mult, "年化報酬率%": cagr,
-                 "最大回撤%": dd, "報酬回撤比": round(cagr / dd, 3)})
+                 "最大回撤%": dd, "報酬回撤比": round(cagr / dd, 3)}
+                | exact_curve(equity_0050(cal, INIT_CASH)["市值"].to_numpy(np.float64), years))
     print(f"\n0050 買進持有（含息）：×{mult}｜年化 {cagr}%｜回撤 {dd}%｜"
           f"報酬回撤比 {rows[-1]['報酬回撤比']}")
     print("（錨點：×5.51／16.8%／33.8%；對不上就是含息或分割校準有問題）")
@@ -70,7 +85,7 @@ def main():
     path = os.path.join(OUT, "macd_multi_conclusion.csv")
     out.to_csv(path, index=False, encoding="utf-8-sig")
     print(f"\n→ {path}")
-    print(out.to_string(index=False))
+    print(out[[c for c in out.columns if not c.endswith(EXACT)]].to_string(index=False))
     return 0
 
 

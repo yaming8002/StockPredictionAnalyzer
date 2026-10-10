@@ -130,7 +130,7 @@ class MultiMACD(VbtMultiStrategy):
         「賣掉舊的、再買新的」，比單股多算交易（實測背離母體 632 → 651 筆）。
         單股引擎走 vbt from_signals，同根衝突本來就兩邊不動作，這裡補齊對齊。
         """
-        entries = self.buy_signal(df).fillna(False).astype(bool)
+        entries = self.entry_signal(df).fillna(False).astype(bool)
         exits = self.sell_signal(df).fillna(False).astype(bool)
         both = entries & exits
         entries, exits = entries & ~both, exits & ~both

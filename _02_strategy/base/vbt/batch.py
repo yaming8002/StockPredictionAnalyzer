@@ -62,11 +62,12 @@ def run_folder(strategy, folder: str, start=None, end=None, limit: int = None,
         if stock_id in exclude:
             continue
         try:
-            df = _load_prices(path, start, end)
-            if df.empty:
+            # 讀全史、不先裁：指標要吃起日前的資料暖身，交易區間交給 strategy.run 裁
+            df = _load_prices(path)
+            if df.loc[start:end].empty:
                 failed.append((stock_id, "區間內無資料"))
                 continue
-            res = strategy.run(df, stock_id=stock_id)
+            res = strategy.run(df, stock_id=stock_id, start=start, end=end)
         except Exception as exc:  # 單檔失敗不影響整批，但要記錄下來
             failed.append((stock_id, str(exc)))
             continue

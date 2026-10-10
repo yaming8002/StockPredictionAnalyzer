@@ -17,6 +17,12 @@ S 取自 MACD 系列第十篇蒙地卡羅那張表的已發佈數字（見下方
 是不是真的有優勢。訊號與價格面板只建一次（`build_panel`），之後只重跑下單模擬
 （`run_panel`）換優先序，否則每抽一次都要重掃全市場。
 
+**下單模擬走精簡引擎 `run_panel_fast`（台股實際費稅，2026-10-10 起）**：隨機那一格（macd_multi_random.py）
+早已走精簡引擎，固定排序若還用 vbt 版（純費率、無最低 20 元），同一張表的「贏不贏隨機」就是拿兩套
+費用口徑在比，所以三種固定排序也改走同一支。vbt 版與精簡引擎的唯一行為差異是優先序平手時的順序
+（精簡引擎按股票代號序；低價／高價排序同價時會碰到），見 fast_multi 檔頭。
+各列另附「<欄名>_精確」＝未四捨五入值（fast_multi.exact_stats），文章出表從精確值一次進位。
+
 執行：
     python _03_multi_strategy/macd/macd_multi_driver.py [--random-runs 1000] [--limit N]
 輸出：result/macd_multi/macd_multi_result.csv ＋ 終端表。
@@ -35,6 +41,7 @@ import pandas as pd
 
 from _02_strategy.base.vbt import common
 from _02_strategy.base.vbt.common import DEFAULT_END, DEFAULT_START, GLITCH
+from _03_multi_strategy.base.fast_multi import EXACT, exact_stats, run_panel_fast
 from _03_multi_strategy.macd.multi_macd import STRATEGIES, MultiMACD
 
 DATA = common.DATA_DIR
@@ -66,12 +73,14 @@ def units(s: int):
 
 def load_all(limit=None):
     """
-    讀全市場，每檔只留 WANT 那幾欄、裁到標準區間。
+    讀全市場，每檔只留 WANT 那幾欄、保留全史（指標暖身吃起日前的資料）。
+    交易區間在 build_panel(DEFAULT_START, DEFAULT_END) 才裁；這裡只篩掉區間內不到 2 根的檔。
 
     走 `common.load_market`（欄位清單讀 parquet metadata，不整檔讀；原因見該函式說明）。
     """
-    return common.load_market(DATA, columns=WANT, start=DEFAULT_START, end=DEFAULT_END,
-                              limit=limit, exclude=GLITCH, min_rows=2)
+    data = common.load_market(DATA, columns=WANT, limit=limit, exclude=GLITCH, min_rows=2)
+    return {sid: df for sid, df in data.items()
+            if len(df.loc[DEFAULT_START:DEFAULT_END]) >= 2}
 
 
 def prio_panels(data, close_panel):
@@ -85,9 +94,9 @@ def prio_panels(data, close_panel):
 
 
 def row_of(label, mname, kind, n_units, res):
-    """出「回測結果表規格」的固定 10 欄；額外掛上擋單數當診斷欄。"""
+    """出「回測結果表規格」的固定 10 欄；額外掛上擋單數當診斷欄，另附各欄精確值。"""
     return common.spec_row(res["summary"], 交易策略=label, 投法=mname, 排序=kind,
-                           份數=n_units, 擋單=res["blocked_orders"])
+                           份數=n_units, 擋單=res["blocked_orders"]) | exact_stats(res["trades"])
 
 
 def main():
@@ -110,7 +119,7 @@ def main():
         builder = MultiMACD()
         builder.BASE, builder.ENTRY, builder.PRIO = base, entry, "low_price"
         tb = time.time()
-        panel = builder.build_panel(data)
+        panel = builder.build_panel(data, DEFAULT_START, DEFAULT_END)
         prios = prio_panels(data, panel["close"])
         print(f"\n{label}｜S={s}｜定額 {n_fixed} 份（每筆 "
               f"{INIT_CASH / n_fixed:,.0f}）｜比例 {n_pct} 份｜"
@@ -123,7 +132,7 @@ def main():
             inst = MultiMACD(initial_cash=INIT_CASH, sizing_mode=mode, **kwargs)
             for kind in ("低價", "高價", "流動性"):
                 tr = time.time()
-                res = inst.run_panel(panel, prios[kind], want_equity=False)
+                res = run_panel_fast(inst, panel, prios[kind], want_equity=False)
                 r = row_of(label, mname, kind, n_units, res)
                 rows.append(r)
                 print(f"  {mname}({n_units}) {kind}：{r['交易次數']:,} 筆"
@@ -135,16 +144,20 @@ def main():
             if a.random_runs > 0:
                 tr = time.time()
                 reps = [row_of(label, mname, "隨機", n_units,
-                               inst.run_panel(panel, np.random.default_rng(
+                               run_panel_fast(inst, panel, np.random.default_rng(
                                    SEED0 + seed).random(panel["entries"].shape),
                                    want_equity=False))
                         for seed in range(a.random_runs)]
                 rep = pd.DataFrame(reps)
-                med = {c: (round(float(rep[c].median()), 4)
+                # 精確欄取「逐次精確值」的中位、不捨入（同 macd_multi_random.summarize）
+                med = {c: ((float(rep[c].median()) if c.endswith(EXACT)
+                            else round(float(rep[c].median()), 4))
                            if rep[c].dtype.kind in "fi" else rep[c].iloc[0])
                        for c in rep.columns}
                 med["總獲利(萬)P5"] = round(float(rep["總獲利(萬)"].quantile(0.05)), 1)
                 med["總獲利(萬)P95"] = round(float(rep["總獲利(萬)"].quantile(0.95)), 1)
+                med["總獲利(萬)P5" + EXACT] = float(rep["總獲利(萬)" + EXACT].quantile(0.05))
+                med["總獲利(萬)P95" + EXACT] = float(rep["總獲利(萬)" + EXACT].quantile(0.95))
                 rows.append(med)
                 print(f"  {mname}({n_units}) 隨機×{a.random_runs}："
                       f"PF {med['獲利因子']}｜總獲利中位 {med['總獲利(萬)']} 萬"

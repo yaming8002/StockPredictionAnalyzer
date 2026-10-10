@@ -5,10 +5,16 @@
 取中位＋P5/P95，當「亂買」的基準線——低價優先到底是真有優勢，還是只是剛好抽中一種
 順序，得跟這條線比才知道。
 
-**為什麼要多進程**：vbt 的 `from_order_func` 逐格走 6,000 天 × 2,258 檔，單場全市場
-實測約 10.5 秒；5 個交易策略 × 2 種投法 × 1,000 次 ＝ 10,000 場，單進程要約 29 小時。
+**下單模擬走精簡引擎**（2026-10-08 起，`_03_multi_strategy/base/fast_multi.py`）：vbt 的
+`from_order_func` 單場全市場約 10~37 秒，5 個交易策略 × 2 種投法 × 1,000 次 ＝ 10,000 場
+要跑好幾個小時；精簡引擎約 0.4 秒／場，且餵沒有平手的優先序（這裡的亂數）時與 vbt 版
+逐筆相同（`_03_multi_strategy/base/verify_fast_multi.py` 全市場 4 種倉位設定對帳一致）。
+2026-10-10 起精簡引擎預設 fees="tw"（現金軌跡改用台股實際費稅，與逐筆 real_pnl 同一本帳），
+這之前跑出的 macd_multi_random.csv 是純費率口徑，**重跑要加 --restart**，否則會接續舊格子。
+每列另附「<欄名>_精確」＝逐次精確值的中位（見 summarize）。
 訊號面板跟優先序無關（面板只看價格與規則，不看現金），所以面板建一次就好，之後丟給
 子進程各自重跑下單模擬。面板落成 .npy 再由子進程讀回，比用 pickle 傳 200 MB 陣列省。
+下面兩段記憶體說明是 vbt 引擎時期的實測，換成精簡引擎後子進程只剩面板本身（數百 MB）。
 
 **⚠️ 記憶體的真正瓶頸是系統的 commit 額度，不是「可用實體記憶體」。** 建面板需要全市場
 資料在手，父進程的 commit 會衝到 20 GB 以上；子進程要跑好幾個小時。兩件事重疊的話光
@@ -52,6 +58,8 @@ import vectorbt as vbt
 vbt.settings["caching"]["enabled"] = False
 
 from _02_strategy.base.vbt import common
+from _02_strategy.base.vbt.common import DEFAULT_END, DEFAULT_START
+from _03_multi_strategy.base.fast_multi import EXACT, exact_stats, run_panel_fast
 from _03_multi_strategy.macd.multi_macd import STRATEGIES, MultiMACD
 from _03_multi_strategy.macd.macd_multi_driver import (INIT_CASH, OUT, PCT_MIN_INVEST,
                                             SEED0, S_BY_STRATEGY, load_all,
@@ -104,8 +112,8 @@ def run_chunk(task: tuple) -> list:
     for seed in seeds:
         np.random.default_rng(SEED0 + seed).random(out=prio)
         # want_equity=False：這裡只要 summary，不必展開整條逐日權益曲線
-        res = inst.run_panel(panel, prio, want_equity=False)
-        row = common.spec_row(res["summary"])
+        res = run_panel_fast(inst, panel, prio, want_equity=False)
+        row = common.spec_row(res["summary"]) | exact_stats(res["trades"])   # 另附逐次精確值
         row["擋單"] = res["blocked_orders"]
         rows.append(row)
         del res
@@ -147,14 +155,23 @@ def run_cell(folder: str, mode: str, kwargs: dict, runs: int, workers: int,
 
 
 def summarize(rows: list, labels: dict) -> dict:
-    """1,000 次的中位數當代表值；總獲利另出 P5/P95 看「亂買」的分布寬度。"""
+    """
+    1,000 次的中位數當代表值；總獲利另出 P5/P95 看「亂買」的分布寬度。
+    「<欄>_精確」＝逐次**精確值**的中位（不捨入），P5/P95 也另出精確版：存檔欄是「逐次已捨入值」
+    的中位（例：總獲利(萬) 每次先捨入到 1 位），文章出表改從精確欄一次進位。
+    """
     rep = pd.DataFrame(rows)
     out = dict(labels)
     for c in rep.columns:
-        out[c] = (round(float(rep[c].median()), 4)
-                  if rep[c].dtype.kind in "fi" else rep[c].iloc[0])
+        if rep[c].dtype.kind not in "fi":
+            out[c] = rep[c].iloc[0]
+        else:
+            med = float(rep[c].median())
+            out[c] = med if c.endswith(EXACT) else round(med, 4)
     out["總獲利(萬)P5"] = round(float(rep["總獲利(萬)"].quantile(0.05)), 1)
     out["總獲利(萬)P95"] = round(float(rep["總獲利(萬)"].quantile(0.95)), 1)
+    out["總獲利(萬)P5" + EXACT] = float(rep["總獲利(萬)" + EXACT].quantile(0.05))
+    out["總獲利(萬)P95" + EXACT] = float(rep["總獲利(萬)" + EXACT].quantile(0.95))
     return out
 
 
@@ -175,7 +192,7 @@ def build_all_panels(data: dict, tmp: str, done: set, t0: float) -> list:
         builder = MultiMACD()
         builder.BASE, builder.ENTRY, builder.PRIO = base, entry, "low_price"
         folder = os.path.join(tmp, f"{base}_{entry}")
-        dump_panel(builder.build_panel(data), folder)
+        dump_panel(builder.build_panel(data, DEFAULT_START, DEFAULT_END), folder)
         plan.append((label, folder, n_fixed, n_pct, todo))
         print(f"{label}｜面板落地｜{time.time() - t0:.0f} 秒", flush=True)
     return plan

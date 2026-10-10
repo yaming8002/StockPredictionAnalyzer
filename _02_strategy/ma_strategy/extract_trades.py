@@ -19,9 +19,8 @@ SHORT, LONG = "sma_60", "sma_200"
 MIN_LOT = 1000 * 1000        # 近 5 日均量 > 1000 張（＝100 萬股）
 
 rows = []
-market = common.load_market(DATA, columns=["open", "volume", SHORT, LONG],
-                            start=DEFAULT_START, end=DEFAULT_END, exclude=GLITCH,
-                            min_rows=250)
+# 讀全史：交叉與量均在全史上算，再裁到標準區間（先裁再算，起日當天會被誤判成交叉）
+market = common.load_market(DATA, columns=["open", "volume", SHORT, LONG], exclude=GLITCH)
 for sid, df in market.items():
     if SHORT not in df.columns:
         continue
@@ -30,6 +29,10 @@ for sid, df in market.items():
     death = (s < l) & (s.shift(1) >= l.shift(1))
     liq = df["volume"].rolling(5).mean() > MIN_LOT      # 訊號日當天的近5日均量
     buy_sig = golden & liq
+    window = (df.index >= DEFAULT_START) & (df.index <= DEFAULT_END)
+    if window.sum() < 250:
+        continue
+    df, buy_sig, death = df.loc[window], buy_sig.loc[window], death.loc[window]
     idx = df.index
     o = df["open"].values
     pos = -1

@@ -26,6 +26,7 @@ if _root not in sys.path:
 import pandas as pd
 
 from _02_strategy.base.vbt import common
+from _02_strategy.base.vbt.common import DEFAULT_END, DEFAULT_START
 from _03_multi_strategy.macd.multi_macd import STRATEGIES, MultiMACD
 from _03_multi_strategy.macd.macd_multi_driver import load_all
 from _02_strategy.macd_strategy.macd_sweep import prepare, variant_trades
@@ -62,7 +63,7 @@ def main():
         m = MultiMACD(initial_cash=UNLIMITED, sizing_mode="fixed",
                       min_invest=PER_TRADE)
         m.BASE, m.ENTRY, m.PRIO = base, entry, "low_price"
-        multi = m.run(multi_data)["summary"]
+        multi = m.run(multi_data, DEFAULT_START, DEFAULT_END)["summary"]
         diff = [f"{k}: 多股 {multi[k]} vs 單股 {single[k]}"
                 for k in EXACT if multi[k] != single[k]]
         for k, tol in CLOSE.items():

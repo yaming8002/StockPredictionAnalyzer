@@ -32,6 +32,9 @@ TURNOVER_MIN = 10_000_000        # 可成交門檻：5 日均量(股) × 收盤 
 
 # 6 個進場（＋錨點），皆配高檔死叉出場
 ENTRIES = ["breakout250", "breakout120", "gap", "low_redk", "breakout60", "divergence"]
+# 錨點進場（2026-07-28 reference 另外納入矩陣／MC 的兩個系列策略）：不在文章多股表裡，
+# 只供需要時比照多股；golden＝純黃金交叉（opt6）、low_zone＝低檔 K,D<20（opt1）
+ANCHORS = ["golden", "low_zone"]
 
 
 class MultiKD(VbtMultiStrategy):
@@ -64,6 +67,10 @@ class MultiKD(VbtMultiStrategy):
             return (k < OVERSOLD) & (d < OVERSOLD) & (c >= o)
         if e == "divergence":
             return (c <= c.rolling(20).min()) & (k > k.rolling(20).min())
+        if e == "low_zone":
+            return (k < OVERSOLD) & (d < OVERSOLD)
+        if e == "golden":
+            return pd.Series(True, index=df.index)               # 不加濾網＝純黃金交叉
         raise ValueError(f"未知進場 {e}")
 
     def _entry_filter(self, df: pd.DataFrame) -> pd.Series:
@@ -77,7 +84,7 @@ class MultiKD(VbtMultiStrategy):
 
     def build_signals(self, df: pd.DataFrame):
         # 收盤判定 → 隔日成交：位移 +1（無 look-ahead）
-        entries = self.buy_signal(df).fillna(False).astype(bool).shift(1, fill_value=False)
+        entries = self.entry_signal(df).fillna(False).astype(bool).shift(1, fill_value=False)
         exits = self.sell_signal(df).fillna(False).astype(bool).shift(1, fill_value=False)
         return entries, exits
 

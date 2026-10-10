@@ -10,6 +10,9 @@
 標色也比照：拿同一組的**隨機列當基準**，贏它＝粉紅(up)、輸它＝淺綠(down)，隨機列本身不標色。
 這樣讀者一眼看得出「這個排序是真本事，還是還不如亂買」。
 
+數值一律優先用 driver 另存的「<欄>_精確」未四捨五入值（固定排序＝逐筆精確值；隨機＝1,000 次
+逐次精確值的中位），從精確值一次 half-up 進位；舊 CSV 沒有精確欄時退回存檔值。
+
 執行：
     PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python \
         _04_analysis/macd/article/build_article11_tables.py [--mode 定額|比例]
@@ -17,6 +20,7 @@
 import argparse
 import os
 import sys
+from decimal import ROUND_HALF_UP, Decimal
 
 _root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if _root not in sys.path:
@@ -37,27 +41,50 @@ COLS = ["交易次數", "擋單", "勝率%", "平均持有天", "獲利平均%",
 PAINT = ["獲利因子", "總獲利(萬)"]
 
 
+def half_up(v, nd: int) -> Decimal:
+    """
+    四捨五入（.5 一律遠離 0 進位）。隨機列是 1,000 次逐欄取中位，偶數個取中間兩個平均，
+    常出現 x.5；Python 的 round／格式化是「銀行家進位＋二進位誤差」，40.65 會變 40.6，
+    跟讀者認知的四捨五入不一致，所以用 Decimal（以字串轉，避開二進位誤差）。
+    """
+    return Decimal(str(v)).quantize(Decimal(1).scaleb(-nd), rounding=ROUND_HALF_UP)
+
+
 def fmt(col: str, v) -> str:
     if col in ("交易次數", "擋單"):
-        return f"{int(round(v)):,}"
+        return f"{half_up(v, 0):,}"
     if col == "平均持有天":
-        return f"{v:.0f}"
+        return f"{half_up(v, 0)}"
     if col == "期望值/筆":
-        return f"{v:,.0f}".replace("-", "−")
+        return f"{half_up(v, 0):,}".replace("-", "−")
     if col == "中位數%":
-        return f"{v:.2f}".replace("-", "−")      # 中位數比照系列其他表留兩位
+        return f"{half_up(v, 2)}".replace("-", "−")      # 中位數比照系列其他表留兩位
     if col == "獲利因子":
-        return f"{v:.2f}"
+        # 留四位：兩位時有幾格跟隨機列顯示相同（如 1.39 對 1.39）卻標成輸，讀者看不出差在哪
+        return f"{half_up(v, 4)}"
     if col == "總獲利(萬)":
         # 負值也要用全形減號，跟其他欄位一致（背離×高價是負的）
-        return f"{v:,.0f}".replace("-", "−")
-    return f"{v:.1f}".replace("-", "−")
+        return f"{half_up(v, 0):,}".replace("-", "−")
+    return f"{half_up(v, 1)}".replace("-", "−")
+
+
+EXACT = "_精確"
+
+
+def with_exact(df: pd.DataFrame) -> pd.DataFrame:
+    """有「<欄>_精確」就用它覆蓋同名存檔欄（同 KD 的 kd_article_common.with_exact）。"""
+    out = df.copy()
+    for c in df.columns:
+        if c.endswith(EXACT) and c[:-len(EXACT)] in out.columns:
+            base = c[:-len(EXACT)]
+            out[base] = out[c].where(out[c].notna(), out[base])
+    return out
 
 
 def load(mode: str) -> pd.DataFrame:
     det = pd.read_csv(DET)
     rnd = pd.read_csv(RND)
-    df = pd.concat([det, rnd], ignore_index=True)
+    df = with_exact(pd.concat([det, rnd], ignore_index=True))
     return df[df["投法"] == mode].copy()
 
 
@@ -107,7 +134,7 @@ def random_note(df: pd.DataFrame) -> str:
         m = 1 + r["總獲利(萬)"] / 100
         lo = 1 + r["總獲利(萬)P5"] / 100
         hi = 1 + r["總獲利(萬)P95"] / 100
-        parts.append(f"{r['交易策略']} {m:.2f}（{lo:.2f}／{hi:.2f}）")
+        parts.append(f"{r['交易策略']} {half_up(m, 2)}（{half_up(lo, 2)}／{half_up(hi, 2)}）")
     return "、".join(parts)
 
 

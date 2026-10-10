@@ -4,7 +4,7 @@
 
 第九篇的表 2 有兩種來源，這裡分開對：
 - 「替換出場規則」「未平倉」「持有天變化」的終點 → 本篇自己跑的
-  `macd_exit_replace_all.csv`。
+  SPA `result/macd_exit_replace/macd_exit_replace.csv`（_02_strategy/macd_strategy/macd_exit_replace.py）。
 - 「原本的出場」「附加出場規則」「持有天變化」的起點 → **直接去讀（四）（七）（八）
   三篇已發佈的 md**，而不是讀 CSV。這樣驗的是「第九篇有沒有正確引用前面的文章」，
   讀者翻回去看到的就是同一個數字。
@@ -28,19 +28,21 @@ import sys
 
 import pandas as pd
 
+from _04_analysis.macd.article.build_article9_table import load_replace  # noqa: E402
+
 POSTS = os.path.join(common.require_blog_dir(), "site", "content", "posts")
 R = common.result_dir("macd_strategy", "single_macd")
 p = pd.read_csv(R + "/_exit_pure_risk.csv")
-rep = pd.read_csv(os.path.join(common.require_blog_dir(), "reference", "macd",
-                               "data", "macd_exit_replace_all.csv"))
+rep = load_replace()          # SPA 替換版結果（母體已換短名、出場用 NAME_EXIT）
+
 LAB1 = {"固定停利 +20%": "停利+20%", "固定停損 2×ATR": "停損2ATR"}
 # 第九篇顯示名 → (replace CSV 的出場名, 附加數字來自哪一篇, 該篇的節標題關鍵字)
 RULES = {
-    "跌破年線": ("跌破MA200", "macd-exit-trend", "跌破年線"),
-    "超級趨勢": ("Supertrend翻空", "macd-exit-trend", "超級趨勢"),
+    "跌破年線": ("跌破年線", "macd-exit-trend", "跌破年線"),
+    "超級趨勢": ("超級趨勢翻空", "macd-exit-trend", "超級趨勢"),
     "拋物線 SAR": ("SAR翻空", "macd-exit-trend", "拋物線 SAR"),
-    "波段高點走低": ("頂頂低", "macd-exit-trend", "波段高點走低"),
-    "跌破二十日低": ("跌破20日低", "macd-exit-trend", "跌破二十日低"),
+    "波段高點走低": ("波段高點走低", "macd-exit-trend", "波段高點走低"),
+    "跌破二十日低": ("跌破二十日低", "macd-exit-trend", "跌破二十日低"),
     "吊燈 3×ATR": ("吊燈3ATR", "macd-exit-risk", "吊燈出場"),
     "自最高點回落 10%": ("自最高點回落10%", "macd-exit-risk", "自最高點回落一成"),
     "抱滿 60 天": ("抱滿60天", "macd-exit-risk", "抱滿六十天"),

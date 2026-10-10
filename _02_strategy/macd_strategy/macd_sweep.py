@@ -31,12 +31,18 @@ DATA = common.DATA_DIR
 
 def prepare(folder: str = DATA, limit: int = None, start: str = DEFAULT_START,
             end: str = DEFAULT_END) -> dict:
-    """讀全市場、算好所有變體會用到的欄位；回傳 {stock_id: df}。"""
+    """
+    讀全市場、算好所有變體會用到的欄位；回傳 {stock_id: 全史 df}。
+
+    df 保留全史（指標吃起日前的資料暖身），交易區間由 variant_trades 的 start／end 裁；
+    這裡只用區間篩掉「區間內不到 2 根」的檔。
+    """
     prep = MacdVariant()
     # 讀檔走 common 共用讀檔；逐檔讀、逐檔備妥，記憶體同時只壓一檔原始資料
     data = {}
-    for sid, df in common.iter_market(folder, start=start, end=end, limit=limit,
-                                      exclude=GLITCH, min_rows=2):
+    for sid, df in common.iter_market(folder, limit=limit, exclude=GLITCH, min_rows=2):
+        if len(df.loc[start:end]) < 2:
+            continue
         common.ensure_columns(df)
         df = prep.add_columns(df.copy())
         prep._ensure_zigzag(df)          # 頂頂低用
@@ -47,25 +53,37 @@ def prepare(folder: str = DATA, limit: int = None, start: str = DEFAULT_START,
 
 
 def variant_trades(data: dict, base: str, filt: str, exit_name: str,
-                   exit_mode: str, liquidity: bool = True):
-    """單一變體跑全市場，回傳 (逐筆交易, summary)。summary 含診斷欄「未平倉%」。"""
-    v = MacdVariant()
-    v.BASE, v.FILTER, v.EXIT, v.EXIT_MODE, v.LIQUIDITY = (
-        base, filt, exit_name, exit_mode, liquidity)
+                   exit_mode: str, liquidity: bool = True,
+                   start: str = DEFAULT_START, end: str = DEFAULT_END):
+    """
+    單一變體跑全市場（交易區間 start～end），回傳 (逐筆交易, summary)。
+    summary 含診斷欄「未平倉%」，以及它的分子分母「開倉數」「已平倉數」（（九）篇表一要列）。
+    """
+    v = make_variant(base, filt, exit_name, exit_mode, liquidity)
     frames, n_entry, n_trade = [], 0, 0
     for sid, df in data.items():
-        res = v.run(df, sid)
+        res = v.run(df, sid, start=start, end=end)
         frames.append(res["trades"])
         # 未平倉率的分母＝實際開倉數。vbt 的 entries 是「所有買訊」，同一個部位
         # 沒平倉前的重複買訊不會開新倉，拿它當分母會低估未平倉率，故用狀態機重數。
-        e, x = v.build_signals(df)       # df 在 prepare 已備妥欄位，不必再 add_columns
+        _, e, x = v.window_signals(df, start, end)   # df 在 prepare 已備妥欄位，不必再 add_columns
         n_entry += _count_positions(e.to_numpy(), x.to_numpy())
         n_trade += len(res["trades"])
     trades = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     summary = common.summarize_trades(trades)
     summary["未平倉%"] = (round((n_entry - n_trade) / n_entry * 100, 2)
                           if n_entry else 0.0)
+    summary["開倉數"], summary["已平倉數"] = n_entry, n_trade
     return trades, summary
+
+
+def make_variant(base: str, filt: str, exit_name: str, exit_mode: str,
+                 liquidity: bool = True) -> MacdVariant:
+    """依四個維度＋流動性開關組出一個 MacdVariant（掃描 driver 與診斷共用同一份設定）。"""
+    v = MacdVariant()
+    v.BASE, v.FILTER, v.EXIT, v.EXIT_MODE, v.LIQUIDITY = (
+        base, filt, exit_name, exit_mode, liquidity)
+    return v
 
 
 def run_variant(data: dict, base: str, filt: str, exit_name: str,
@@ -100,6 +118,36 @@ def _count_positions(entries: np.ndarray, exits: np.ndarray) -> int:
             holding = True
             n += 1
     return n
+
+
+def legacy_row(labels: dict, s: dict, n_stock: int, diag: dict = None,
+               trailing_unclosed: bool = True) -> dict:
+    """
+    （一）～（九）篇對照表的列格式：標籤欄 → 診斷欄 → 參與股票數／失敗檔數 → 規格 9 欄。
+    欄序沿用遺失 driver 產出的舊 CSV（_matrix_3x3／_entry_sweep_v2／_exit_* 等），下游照舊讀。
+
+    失敗檔數固定 0：讀不了的檔在 prepare（iter_market）就印出清單並略過，
+    變體執行中任何一檔出錯會直接 raise，不會「跑完但少算幾檔」。
+    trailing_unclosed：在最後補一欄「未平倉%」（舊檔沒有；取代型出場必量，見檔頭）。
+    """
+    row = dict(labels)
+    row.update(diag or {})
+    row["參與股票數"], row["失敗檔數"] = n_stock, 0
+    spec = common.spec_row(s)
+    row.update(spec)
+    if trailing_unclosed:
+        row["未平倉%"] = s.get("未平倉%", 0.0)
+    return row
+
+
+def write_csv(rows: list, out_dir: str, name: str) -> str:
+    """規格檢查後寫 CSV（utf-8-sig，Excel 直接開不亂碼），回傳路徑。"""
+    df = pd.DataFrame(rows)
+    common.assert_spec_columns(df)
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, name)
+    df.to_csv(path, index=False, encoding="utf-8-sig")
+    return path
 
 
 def spec_rows(summaries: list) -> pd.DataFrame:

@@ -2,10 +2,13 @@
 """
 產第九篇第二張表的 24 列 HTML ＋ 正文要用的統計，避免手抄。
 
-欄位來源分兩種，附註裡有交代：
-- 「原本的出場」與「附加」兩欄＝引用（四）（七）（八）篇**已發佈**的數字，
-  讀者翻回去看得到同樣的值。
-- 「替換」與「未平倉」兩欄＝本篇同一批跑出來的（macd_exit_replace_all.csv）。
+欄位來源（全部讀 SPA 回測段的產出，2026-10-08 起不再寫死常數、也不讀 blog 那份舊副本）：
+- 「替換」「未平倉」「持有天」＝ result/macd_exit_replace/macd_exit_replace.csv
+  （_02_strategy/macd_strategy/macd_exit_replace.py）。
+- 「原本的出場」＝同一份 CSV 的「原生出場」列（同一批跑出來，與（四）篇矩陣對角線同值）。
+- 「附加」＝（七）篇趨勢出場讀 result/single_macd/_exit_parallel.csv 的 A並行組、
+  （八）篇風控出場讀 _exit_sweep.csv 的 B疊加組（_02_strategy/macd_strategy/macd_exit_sweep.py）。
+文章是否正確引用（四）（七）（八）篇已發佈的數字，由 verify_article9.py 對 md 檢查。
 
 執行：
     PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python \
@@ -18,55 +21,82 @@ import sys
 _root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if _root not in sys.path:
     sys.path.insert(0, _root)
+
+import pandas as pd  # noqa: E402
+
 from _02_strategy.base.vbt import common  # noqa: E402
-import sys
 
-import pandas as pd
-
-CSV = os.path.join(common.require_blog_dir(), "reference", "macd", "data", "macd_exit_replace_all.csv")
-# 母體 → (文章顯示名, 基準線獲利因子, 基準線持有天)；取自（四）篇已發佈數字
-POPS = [("交叉", "交叉", 0.9867, 19), ("零軸", "零軸", 1.2387, 43),
-        ("背離", "背離", 1.0289, 51)]
-# (CSV 的出場名, 文章顯示名, 出處, 三母體的「附加」獲利因子)
+REPLACE_CSV = os.path.join(common.result_dir("macd_strategy", "macd_exit_replace"),
+                           "macd_exit_replace.csv")
+SWEEP_DIR = common.result_dir("macd_strategy", "single_macd")
+# replace CSV 的母體名（NAME_BASE）→ 文章／舊表用的短名
+POP_SHORT = {"黃金交叉": "交叉", "零軸上穿": "零軸", "純背離": "背離"}
+POPS = ["交叉", "零軸", "背離"]
+# (replace CSV 的出場名, 文章顯示名, 出處篇, 附加數字的來源檔, 該檔的組, 該檔的出場名)
 RULES = [
-    ("跌破MA200", "跌破年線", "七", {"交叉": 0.9769, "零軸": 1.2073, "背離": 0.9758}),
-    ("Supertrend翻空", "超級趨勢", "七", {"交叉": 0.9850, "零軸": 1.1606, "背離": 1.0105}),
-    ("SAR翻空", "拋物線 SAR", "七", {"交叉": 0.9379, "零軸": 0.9645, "背離": 0.9507}),
-    ("頂頂低", "波段高點走低", "七", {"交叉": 0.9804, "零軸": 1.1634, "背離": 0.9380}),
-    ("跌破20日低", "跌破二十日低", "七", {"交叉": 0.9906, "零軸": 1.2029, "背離": 0.8650}),
-    ("吊燈3ATR", "吊燈 3×ATR", "八", {"交叉": 0.9740, "零軸": 1.1117, "背離": 0.8934}),
-    ("自最高點回落10%", "自最高點回落 10%", "八",
-     {"交叉": 0.9515, "零軸": 1.1096, "背離": 0.8628}),
-    ("抱滿60天", "抱滿 60 天", "八", {"交叉": 0.9864, "零軸": 1.1892, "背離": 0.9970}),
+    ("跌破年線", "跌破年線", "七", "_exit_parallel.csv", "A並行", "跌破MA200"),
+    ("超級趨勢翻空", "超級趨勢", "七", "_exit_parallel.csv", "A並行", "Supertrend翻空"),
+    ("SAR翻空", "拋物線 SAR", "七", "_exit_parallel.csv", "A並行", "SAR翻空"),
+    ("波段高點走低", "波段高點走低", "七", "_exit_parallel.csv", "A並行", "頂頂低"),
+    ("跌破二十日低", "跌破二十日低", "七", "_exit_parallel.csv", "A並行", "跌破20日低"),
+    ("吊燈3ATR", "吊燈 3×ATR", "八", "_exit_sweep.csv", "B疊加", "吊燈3ATR"),
+    ("自最高點回落10%", "自最高點回落 10%", "八", "_exit_sweep.csv", "B疊加", "回落10%"),
+    ("抱滿60天", "抱滿 60 天", "八", "_exit_sweep.csv", "B疊加", "抱滿60天"),
 ]
 
 
+def load_replace() -> pd.DataFrame:
+    """讀替換版結果，母體換成短名（verify_article9 共用）。"""
+    d = pd.read_csv(REPLACE_CSV)
+    d["母體"] = d["母體"].map(POP_SHORT)
+    return d
+
+
+def appended_pf() -> dict:
+    """{(文章出場名, 母體): 附加版獲利因子}。"""
+    cache, out = {}, {}
+    for _, name, _, fname, grp, key in RULES:
+        if fname not in cache:
+            cache[fname] = pd.read_csv(os.path.join(SWEEP_DIR, fname))
+        d = cache[fname]
+        for pop in POPS:
+            r = d[(d["組"] == grp) & (d["母體"] == pop) & (d["出場"] == key)]
+            if len(r) != 1:
+                sys.exit(f"{fname} 查無（或重複）{grp}/{pop}/{key}")
+            out[(name, pop)] = float(r.iloc[0]["獲利因子"])
+    return out
+
+
 def main():
-    d = pd.read_csv(CSV)
+    d = load_replace()
+    add = appended_pf()
     rows, stats = [], []
-    for pop, shown, base_pf, base_days in POPS:
-        for key, name, src, add in RULES:
+    for pop in POPS:
+        base = d[(d["母體"] == pop) & (d["出場"] == "原生出場")].iloc[0]
+        base_pf, base_days = base["獲利因子"], base["平均持有天"]
+        for key, name, src, *_ in RULES:
             r = d[(d["母體"] == pop) & (d["出場"] == key)]
             if not len(r):
                 sys.exit(f"CSV 查無 {pop}/{key}")
             r = r.iloc[0]
             rep, unc, days = r["獲利因子"], r["未平倉%"], r["平均持有天"]
-            cls = "up" if rep > add[pop] else "down"    # 底色比的是同一列的「附加」
+            a = add[(name, pop)]
+            cls = "up" if rep > a else "down"    # 底色比的是同一列的「附加」
             rows.append(
-                f'<tr><td>{shown}</td><td>{name}</td><td>{unc:.2f}%</td>'
-                f'<td>{base_pf:.4f}</td><td>{add[pop]:.4f}</td>'
+                f'<tr><td>{pop}</td><td>{name}</td><td>{unc:.2f}%</td>'
+                f'<td>{base_pf:.4f}</td><td>{a:.4f}</td>'
                 f'<td class="{cls}">{rep:.4f}</td>'
-                f'<td>{base_days} → {days:.0f}</td></tr>')
+                f'<td>{base_days:.0f} → {days:.0f}</td></tr>')
             stats.append({"母體": pop, "出場": name, "出處": src, "基準線": base_pf,
-                          "附加": add[pop], "替換": round(rep, 4),
-                          "勝替換": rep > add[pop], "勝基準線": rep > base_pf,
+                          "附加": a, "替換": round(rep, 4),
+                          "勝替換": rep > a, "勝基準線": rep > base_pf,
                           "未平倉%": round(unc, 2), "持有天": round(days, 1)})
     print("\n".join(rows))
     s = pd.DataFrame(stats)
     print("\n" + "=" * 70)
     print(f"替換勝過附加：{s['勝替換'].sum()} / {len(s)}")
     print(f"替換勝過基準線：{s['勝基準線'].sum()} / {len(s)}")
-    for pop, _, _, _ in POPS:
+    for pop in POPS:
         x = s[s["母體"] == pop]
         print(f"  {pop}：勝附加 {x['勝替換'].sum()}/{len(x)}、"
               f"勝基準線 {x['勝基準線'].sum()}/{len(x)}")

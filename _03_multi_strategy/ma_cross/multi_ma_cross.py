@@ -93,7 +93,7 @@ class MultiMACross(VbtMultiStrategy):
 
     def build_signals(self, df: pd.DataFrame):
         # 收盤判定 → 隔日成交：訊號位移 +1（無 look-ahead）
-        entries = self.buy_signal(df).fillna(False).astype(bool).shift(1, fill_value=False)
+        entries = self.entry_signal(df).fillna(False).astype(bool).shift(1, fill_value=False)
         exits = self.sell_signal(df).fillna(False).astype(bool).shift(1, fill_value=False)
         return entries, exits
 

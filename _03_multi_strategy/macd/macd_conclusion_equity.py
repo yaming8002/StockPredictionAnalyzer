@@ -9,14 +9,17 @@ _03 只做多股回測、_04 只做分析。
 指標暖身仍吃 2002 起的資料（`build_panel` 先算指標再切期間）。
 
 **權益曲線用逐日市值計價**（現金 ＋ 持倉當日市值），不是只看已實現損益——已實現
-口徑看不到未平倉部位的浮虧，回撤會被低估、顯得比實際樂觀。基底的 `run_panel`
-直接回傳 vbt 的組合權益曲線，這裡不另外重算一條。
+口徑看不到未平倉部位的浮虧，回撤會被低估、顯得比實際樂觀。
+
+引擎用精簡引擎 `run_panel_fast`（2026-10-10 起，原為 vbt `run_panel`）：現金軌跡用台股實際費稅
+（最低 20 元、證交稅、無條件進位），權益曲線與逐筆 real_pnl 是同一本帳；vbt 版是純費率，
+最終權益會與「本金＋總獲利」對不上。低價平手時按股票代號序（與多股 driver 同一支）。
 
 執行：
     python _03_multi_strategy/macd/macd_conclusion_equity.py [--limit N]
 輸出：_02_strategy/macd_strategy/result/macd_multi/
     conclusion_equity.parquet  每欄一組「交易策略｜投法」的逐日權益
-    conclusion_runs.csv        每組的份數、交易次數、擋單
+    conclusion_runs.csv        每組的份數、規格 9 欄、擋單（另附「<欄名>_精確」未四捨五入值）
 """
 import argparse
 import os
@@ -30,10 +33,13 @@ if _root not in sys.path:
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
+from _03_multi_strategy.base.fast_multi import exact_stats, run_panel_fast  # noqa: E402
 from _03_multi_strategy.macd.macd_multi_driver import (INIT_CASH, OUT,  # noqa: E402
                                                        PCT_MIN_INVEST, S_BY_STRATEGY,
                                                        load_all, units)
 from _03_multi_strategy.macd.multi_macd import STRATEGIES, MultiMACD  # noqa: E402
+from _02_strategy.base.vbt.common import DEFAULT_END  # noqa: E402
 
 # 必須等於 0050 對照區間的起點（_04 基準模組的 BENCHMARK_START）。回測層不往上 import 分析層，
 # 所以這裡寫值；分析段讀檔時會檢查兩者一致，不一致直接報錯，不會靜默比錯期間。
@@ -61,7 +67,7 @@ def main():
         n_fixed, n_pct = units(S_BY_STRATEGY[label])
         builder = MultiMACD()
         builder.BASE, builder.ENTRY, builder.PRIO = base, entry, "low_price"
-        panel = builder.build_panel(data, start_date=WIN_START)
+        panel = builder.build_panel(data, start_date=WIN_START, end_date=DEFAULT_END)
         this_cal = panel["close"].index
         # 各組共用同一份交易日曆才能放進同一張寬表；不一致就停，不默默對齊補值
         if cal is not None and not this_cal.equals(cal):
@@ -73,11 +79,11 @@ def main():
                 ("比例", "percent_floor",
                  {"invest_ratio": 1.0 / n_pct, "min_invest": PCT_MIN_INVEST}, n_pct)):
             inst = MultiMACD(initial_cash=INIT_CASH, sizing_mode=mode, **kwargs)
-            res = inst.run_panel(panel)          # 買入排序用預設低價優先
+            res = run_panel_fast(inst, panel)    # 買入排序用面板的低價優先
             curves[equity_key(label, mname)] = res["equity"].to_numpy(np.float64)
-            runs.append({"交易策略": label, "投法": mname, "份數": n_units,
-                         "交易次數": res["summary"]["交易次數"],
-                         "擋單": res["blocked_orders"]})
+            runs.append(common.spec_row(res["summary"], 交易策略=label, 投法=mname,
+                                        份數=n_units, 擋單=res["blocked_orders"])
+                        | exact_stats(res["trades"]))      # 精確值供文章一次進位
             print(f"  {mname}({n_units})：{runs[-1]['交易次數']:,} 筆｜擋單 {runs[-1]['擋單']:,}",
                   flush=True)
 

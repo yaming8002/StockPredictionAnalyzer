@@ -149,10 +149,18 @@ class VbtMultiStrategy:
         raise NotImplementedError
 
     def build_signals(self, df: pd.DataFrame):
-        """回傳 (entries, exits)；路徑相依出場覆寫此函式做單檔掃描。"""
-        entries = self.buy_signal(df).fillna(False).astype(bool)
+        """回傳 (entries, exits)；路徑相依出場覆寫此函式做單檔掃描。覆寫時進場一律取 entry_signal。"""
+        entries = self.entry_signal(df).fillna(False).astype(bool)
         exits = self.sell_signal(df).fillna(False).astype(bool)
         return entries, exits
+
+    def entry_signal(self, df: pd.DataFrame) -> pd.Series:
+        """buy_signal 再加交易區間閘門：判定日早於起日的進場不算（與單股基底同一口徑）。"""
+        sig = self.buy_signal(df)
+        start = getattr(self, "_trade_start", None)
+        if start is not None:
+            sig = sig & (df.index >= pd.Timestamp(start))
+        return sig
 
     def priority(self, df: pd.DataFrame, stock_id: str):
         """
@@ -199,19 +207,29 @@ class VbtMultiStrategy:
 
     def build_panel(self, data_dict: dict, start_date: str = None,
                     end_date: str = None) -> dict:
-        """掃一次全市場、對齊成 (T, N) 面板。回傳的 dict 可重複餵給 run_panel。"""
+        """
+        掃一次全市場、對齊成 (T, N) 面板。回傳的 dict 可重複餵給 run_panel。
+
+        data_dict 傳全史：指標與訊號都在全史上算（起日前當暖身），進場只認區間內的判定日
+        （entry_signal），算完才裁到 [start_date, end_date]。先裁再算的話，起日當天的
+        shift 會補 False，把「起日已在長均之上」誤判成一次交叉（2026-10-08 改）。
+        """
         stock_ids = sorted(data_dict.keys())
         close_cols, entry_cols, exit_cols, price_cols, prio_cols = {}, {}, {}, {}, {}
         has_priority = False
+        self._trade_start = start_date
 
         for sid in stock_ids:
             df = data_dict[sid]
             common.ensure_columns(df)
             df = self.add_columns(df.copy())
-            if start_date or end_date:
-                df = df.loc[(df.index >= (start_date or df.index.min())) &
-                            (df.index <= (end_date or df.index.max()))]
             entries, exits = self.build_signals(df)
+            if start_date or end_date:
+                keep = ((df.index >= pd.Timestamp(start_date or df.index.min()))
+                        & (df.index <= pd.Timestamp(end_date or df.index.max())))
+                df, entries, exits = df.loc[keep], entries.loc[keep], exits.loc[keep]
+                if df.empty:
+                    continue
             close_cols[sid] = df["close"]
             entry_cols[sid] = entries.fillna(False).astype(bool)
             exit_cols[sid] = exits.fillna(False).astype(bool)
