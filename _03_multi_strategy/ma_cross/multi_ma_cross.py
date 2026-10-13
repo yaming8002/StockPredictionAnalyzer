@@ -22,7 +22,7 @@ if _project_root not in sys.path:
 import numpy as np
 import pandas as pd
 
-from _01_data.indicators_trend import calculate_sma
+from _01_data.indicators_trend import calculate_sma, calculate_adx
 from _02_strategy.base.vbt import common
 # 跨策略共用的單一定義（資料品質排除集＋標準回測區間），勿在此另立第二份
 from _02_strategy.base.vbt.common import GLITCH, DEFAULT_START, DEFAULT_END, load_market
@@ -60,20 +60,9 @@ class MultiMACross(VbtMultiStrategy):
             angle_short = np.degrees(np.arctan(sl_short / w * 100))
             angle_long = np.degrees(np.arctan(sl_long / w * 100))
             df["angle_gap"] = angle_short - angle_long
-        # ADX(14) Wilder（自算，口徑同單股 ma_cross）
+        # ADX(14) Wilder，引用 _01_data 的 calculate_adx（口徑同單股 ma_cross）
         if self.VOL_ADX and self.VOL_ADX > 0:
-            high, low, close = df["high"], df["low"], df["close"]
-            prev_c = close.shift(1)
-            up = high.diff(); dn = -low.diff()
-            plus_dm = up.where((up > dn) & (up > 0), 0.0)
-            minus_dm = dn.where((dn > up) & (dn > 0), 0.0)
-            tr = pd.concat([high - low, (high - prev_c).abs(), (low - prev_c).abs()], axis=1).max(axis=1)
-            p = 14
-            atr = tr.ewm(alpha=1 / p, adjust=False).mean()
-            plus_di = 100 * plus_dm.ewm(alpha=1 / p, adjust=False).mean() / atr
-            minus_di = 100 * minus_dm.ewm(alpha=1 / p, adjust=False).mean() / atr
-            dx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di)).fillna(0.0)
-            df["adx"] = dx.ewm(alpha=1 / p, adjust=False).mean()
+            calculate_adx(df, 14)
         return df
 
     def buy_signal(self, df: pd.DataFrame) -> pd.Series:

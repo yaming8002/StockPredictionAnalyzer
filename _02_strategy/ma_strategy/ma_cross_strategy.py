@@ -9,17 +9,33 @@
 
 
 優化紀錄（#N = 改動序號，依測試先後；旗標設定切換，最優版可再凍結成註解）：
-  #1 MIN_VOL_ZHANG  流動性底線：5 日均量 > N 張（=N×1000 股）。✅ 勝率不掉、可成交
-  #2 VOL_ADX>0      波動率：交叉前一根 ADX(14) < VOL_ADX（盤整時才進）。△ PF 小升、量大減
-  #3 CONFIRM        雙重確認（連 2 日 short>long 才進）。❌ 對雙均線無效
-  #4 ANGLE_DAYS>0   嚴格夾角：short>long 且 ratio(短/長) 連 N 日遞增（--angle-days N 或 --angle3=3）。○ 長組合輕微正向
-  #5 STRONGK        交叉當日強 K（長紅開→收≥5% 或 跳空過短均線）。✅ 長組合 EV(Trim) 大升（最佳）〔跳空基準 2026-06-26 由長均改短均，21 組逐格對比影響可忽略：訊號主由長紅貢獻，跳空僅補位；長組合 50/200·60/200·120/200 仍甜蜜區〕
-  #6 ALIGN          多頭排列（新定義）：120日線>200日線 且 收盤>120日線（長線仍多頭格局）才進，固定120/200。〔1000張基準下重測中〕
-  #7 VOL_BOTH       量能 BOTH（lab 冠軍量能）：當日量 > 20日均量×1.5 且 連 3 日量 ≥ 100萬股。❌ 過濾過度：量砍到1/10、EV(Trim)全轉負（長組合 +185→−86）
-  #8 CHOCH          CHoCH 早期出場（ZigZag 2% 進場以來 lower-high 出場；死叉 或 CHoCH）。❌ 長組合有害：勝率升但砍趨勢利潤、EV(Trim)轉負（60/200 +195→−61）
-  #9 EXIT_BELOW_SHORT 出場加嚴：收盤由上跌破短均線也出場（除死亡交叉外，--exit-below-short）。❌ 全21組有害：黃金交叉後價格本就會回測短均，等於「一拉回就跑」，持有天全崩(50/200 236→42)、砍掉趨勢利潤；長均線200那5組 EV(Trim) 由正(+14~+194)全翻負(−101~−145)、去極值PF 1.0~1.15→~0.5。
-  #10 DIVERGE        夾角擴大進場（短均N日%斜率>長均%斜率）/ 收斂或死叉出場（--diverge [--diverge-margin X] [--slope-win N]）。❌ 同 #9：收斂出場太敏感、趨勢途中斜率波動就出場，持有天 236→42~53、交易×2.8、長均200那3組 EV(Trim) +93~+194 全翻負(−96~−115)。問題在「出場」不在進場。純進場版（--diverge-entry-only，只夾角擴大進場+死叉出場）= ○ 微幅：幾乎同 baseline（交叉當下短均本就比長均爬得快，「夾角擴大」與交叉高度重疊），長組合 EV(Trim) +184→+194/+194→+201/+93→+105、去極PF +0.01~0.03，屬 #4 那類微調、非 #5 強K 等級。
-  #11 ANGLE_DEG      黃金交叉夾角(短均-長均度數)>N度才進（--angle-deg N；每日%斜率當正切）。✅ 有效(≈強K等級)：夾角>20度長組合 EV(Trim) 大升、Trim PF 全>1（50/120 −19→+137、60/120 −16→+277、50/200 +184→+329、60/200 +194→+357；EV(Trim) 甚至高於強K），交易砍至~1/3，本質同強K=順動能陡升交叉。**+流動性300張仍撐住(真．可成交、非小型股幻覺)**：EV(Trim)全正、Trim PF 多數>1（60/120 +317/1.19最強、50/200 +197/1.04、60/200 +186/1.02；50/120 0.96微跌破）。⚠️ 120/200 僅~1.2-1.8k筆樣本小不穩。**60/120+夾角20度+300張=最強可成交配方(優於強K+300)**。
+  數字為 2002–2025 重跑結果（PF＝獲利因子、EV＝期望值/筆(元)；完整見 reference/ma_cross/_full_aggregate_all_variants.csv）。
+  baseline 60/200：交易 22,886、PF 2.47、EV 1,206、持有 249 天；50/200：PF 2.42、EV 1,151、持有 236 天。
+  #1 MIN_VOL_ZHANG  流動性底線：5 日均量 > N 張（=N×1000 股）。✅ 勝率不掉、可成交：60/200 PF 2.47→2.13（>300 張）／1.96（>1000 張）
+  #2 VOL_ADX>0      波動率：交叉前一根 ADX(14) < VOL_ADX（盤整時才進）。△ PF 小升、量大減：60/200 PF 2.47→2.52（<25）／2.61（<20），
+                    交易 22,886→8,519／5,010
+  #3 CONFIRM        雙重確認（連 2 日 short>long 才進）。❌ 對雙均線無感：60/200 PF 2.47→2.48、交易幾乎不變
+  #4 ANGLE_DAYS>0   嚴格夾角：short>long 且 ratio(短/長) 連 N 日遞增（--angle-days N 或 --angle3=3）。○ 幾乎同 baseline：
+                    50/200 PF 2.42→2.43；2 日與 3 日無實質差別
+  #5 STRONGK        交叉當日強 K（長紅開→收≥5% 或 跳空過短均線）。✅ 長組合每筆期望值升（60/200 EV 1,206→1,352、
+                    120/200 1,146→1,337）、PF 大致持平（60/200 2.47→2.45、50/200 2.42→2.27），交易砍到約 4~5 成
+                    〔跳空基準 2026-06-26 由長均改短均，訊號主由長紅貢獻，跳空僅補位〕
+  #6 ALIGN          多頭排列（新定義）：120日線>200日線 且 收盤>120日線（長線仍多頭格局）才進，固定120/200。
+                    1000 張基準下 PF 升（60/200 1.96→2.29、120/200 1.91→1.97），但交易大減（60/200 8,593→1,470）
+  #7 VOL_BOTH       量能 BOTH（lab 冠軍量能）：當日量 > 20日均量×1.5 且 連 3 日量 ≥ 100萬股。❌ 過濾過度：交易砍到約 1/10、
+                    60/200 PF 2.47→1.66、總獲利 2,760→148 萬
+  #8 CHOCH          CHoCH 早期出場（ZigZag 2% 進場以來 lower-high 出場；死叉 或 CHoCH）。❌ 長組合有害：勝率小升但砍趨勢利潤
+                    （60/200 EV 1,206→184、PF 2.47→1.42、持有 249→48 天）
+  #9 EXIT_BELOW_SHORT 出場加嚴：收盤由上跌破短均線也出場（除死亡交叉外，--exit-below-short）。❌ 全21組有害：黃金交叉後價格
+                    本就會回測短均，等於「一拉回就跑」，持有天全崩(50/200 236→42)、砍掉趨勢利潤（60/200 PF 2.47→1.54；5/10 0.95→0.72）。
+  #10 DIVERGE       夾角擴大進場（短均N日%斜率>長均%斜率）/ 收斂或死叉出場（--diverge [--diverge-margin X] [--slope-win N]）。
+                    ❌ 同 #9：收斂出場太敏感，持有天 236→42~53、交易×2.8、長均200那3組 PF 2.4 上下→1.35~1.41。問題在「出場」不在進場。
+                    純進場版（--diverge-entry-only，只夾角擴大進場+死叉出場）= ○ 幾乎同 baseline（50/200、60/200 PF 不變、
+                    120/200 2.38→2.40）：交叉當下短均本就比長均爬得快，「夾角擴大」與交叉高度重疊。
+  #11 ANGLE_DEG      黃金交叉夾角(短均-長均度數)>N度才進（--angle-deg N；每日%斜率當正切）。夾角>20度：交易砍至約 1/3 以下，
+                    每筆期望值升（50/200 EV 1,151→1,465、60/200 1,206→1,633、60/120 804→1,474），PF 60/120 2.15→2.46、
+                    50/200 2.42→2.29；120/200 PF 3.76 但僅 1,703 筆、樣本小不穩。+流動性 300 張：60/120 PF 2.40、EV 1,430，
+                    高於強K+300張（60/120 1.97／840、60/200 2.26／1,270），但總獲利較低（635 vs 870 萬）。
 
 執行（全市場、掃資料夾、彙總；輸出 result/ma_cross/<variant>/，格式同 single_ma）：
   python _02_strategy/ma_strategy/ma_cross_strategy.py <資料夾> --short 50 --long 200 [--confirm] [--angle3]
@@ -37,7 +53,7 @@ if _project_root not in sys.path:
 import numpy as np
 import pandas as pd
 
-from _01_data.indicators_trend import calculate_sma
+from _01_data.indicators_trend import calculate_sma, calculate_adx
 from _01_data.indicators_pattern import calculate_zigzag
 from _02_strategy.base.vbt import batch
 from _02_strategy.base.vbt.single import VbtSingleStrategy
@@ -78,7 +94,7 @@ class MACrossStrategy(VbtSingleStrategy):
     MIN_VOL_SHARES = 0        # 進場「當日成交量 > N 股」才進（filter；與 MIN_VOL_ZHANG 的5日均量不同，這是當日量）
 
     def add_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """短/長均線引用 _01_data 指標(sma)；ADX/量能均線/強K/zigzag 無對應 indicators 故依需求補。"""
+        """短/長均線(sma)、ADX、zigzag 引用 _01_data 指標；量能均線/強K 無對應 indicators 故依需求補。"""
         df["ma_short"] = _ma(df, self.SHORT_MA)
         df["ma_long"] = _ma(df, self.LONG_MA)
         df["ratio"] = df["ma_short"] / df["ma_long"]          # 夾角代理（>1 表短在長之上）
@@ -94,19 +110,8 @@ class MACrossStrategy(VbtSingleStrategy):
         # 強 K：長紅(開→收≥5%) 或 跳空開在短均之上（跳空基準用短均，非長均）
         df["long_red"] = df["close"] >= df["open"] * 1.05
         df["gap_over_short"] = (df["open"] > df["ma_short"]) & (df["open"] > df["close"].shift(1))
-        # ADX(14) Wilder（自算）
-        high, low, close = df["high"], df["low"], df["close"]
-        prev_c = close.shift(1)
-        up = high.diff(); dn = -low.diff()
-        plus_dm = up.where((up > dn) & (up > 0), 0.0)
-        minus_dm = dn.where((dn > up) & (dn > 0), 0.0)
-        tr = pd.concat([high - low, (high - prev_c).abs(), (low - prev_c).abs()], axis=1).max(axis=1)
-        p = 14
-        atr = tr.ewm(alpha=1 / p, adjust=False).mean()
-        plus_di = 100 * plus_dm.ewm(alpha=1 / p, adjust=False).mean() / atr
-        minus_di = 100 * minus_dm.ewm(alpha=1 / p, adjust=False).mean() / atr
-        dx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di)).fillna(0.0)
-        df["adx"] = dx.ewm(alpha=1 / p, adjust=False).mean()
+        # ADX(14) Wilder，引用 _01_data 的 calculate_adx（寫入 df["adx"]）
+        calculate_adx(df, 14)
         # ALIGN（新定義）：長線仍處多頭格局才進＝120日線 > 200日線 且 收盤 > 120日線。
         # 固定用 120/200（不隨交叉的短/長變動），代表「整體長期趨勢還在多頭」這道大方向濾網。
         ma120 = _ma(df, 120)

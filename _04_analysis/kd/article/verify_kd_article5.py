@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 驗 KD 交叉（五）kd-cross-combo：6×6 矩陣、高檔死叉完整表、蒙地卡羅表、附錄 36 組逐格，
-以及正文的範圍句（「1.42～1.72」「0.92 以下」「回撤 P95 4～7%」…）與排名句。
+以及正文的範圍句（「1.42～1.72」「0.92 以下」「回撤 P95 4.5～7.1%」（與表同為一位小數）…）與排名句。
 
 蒙地卡羅表的報酬欄存檔只有一位小數，顯示取整數時若剛好落在 .5（例如 626.5），
 build_kd_single_tables.mc_exact 會用同一 seed 重算該組未取整的分位數再進位。
@@ -68,9 +68,9 @@ def main() -> int:
     mc = pd.read_csv(os.path.join(MC_DIR, "kd_montecarlo.csv"), encoding="utf-8-sig")
     mc = mc[mc["分組"] == "文章"]
     ck.check((mc["本金大虧%"] == 0).all(), "破產率全部 0")
-    ck.contains(text, f"最大回撤 P95 只有 {fmt(mc['回撤% P95'].min(), 0)}～{fmt(mc['回撤% P95'].max(), 0)}%、"
+    ck.contains(text, f"最大回撤 P95 只有 {fmt(mc['回撤% P95'].min(), 1)}～{fmt(mc['回撤% P95'].max(), 1)}%、"
                       f"最大連敗 P95 約 {mc['連敗 P95'].min()}～{mc['連敗 P95'].max()} 筆", "回撤／連敗範圍")
-    ck.contains(text, f"回撤 P95 只有 {fmt(mc['回撤% P95'].min(), 0)}～{fmt(mc['回撤% P95'].max(), 0)}%，而且六組",
+    ck.contains(text, f"回撤 P95 只有 {fmt(mc['回撤% P95'].min(), 1)}～{fmt(mc['回撤% P95'].max(), 1)}%，而且六組",
                 "重點整理回撤")
     ck.check(mc["報酬% P5"].min() >= 120, f"P5 都在 +120% 以上：{mc['報酬% P5'].min()}")
     hi = mc[mc["進場"].isin(["breakout250", "breakout120", "breakout60", "gap"])]

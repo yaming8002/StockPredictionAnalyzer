@@ -47,8 +47,8 @@ def article_row(label: str, trades: pd.DataFrame, mc: dict) -> dict:
     不是蒙地卡羅產物；賺賠比 ＝ 平均獲利% ÷ |平均虧損%|。
     """
     s = summarize_trades(trades)
-    ret = {k: round((mc[f"最終資金_{k}"] - INIT_CASH) / INIT_CASH * 100, 1)
-           for k in ("P5", "中位", "P95")}
+    exact = {k: (mc[f"最終資金_{k}"] - INIT_CASH) / INIT_CASH * 100 for k in ("P5", "中位", "P95")}
+    ret = {k: round(v, 1) for k, v in exact.items()}
     win, loss = s["平均獲利報酬率(%)"], s["平均虧損報酬率(%)"]
     return {"組合": label, "交易數": mc["歷史筆數"],
             "抽樣模式": "抽區間" if mc["歷史筆數"] >= T_LOW else "全納",
@@ -57,7 +57,9 @@ def article_row(label: str, trades: pd.DataFrame, mc: dict) -> dict:
             "破產%": mc[f"破產機率(<{RUIN_RATIO:.0%})"],
             "最大連敗 P95": mc["最大連敗_P95"], "最大回撤% P95": mc["最大回撤%_P95"],
             "勝率%": s["勝率(%)"], "平均獲利%": win, "平均虧損%": loss,
-            "賺賠比": round(win / abs(loss), 2) if loss else None}
+            "賺賠比": round(win / abs(loss), 2) if loss else None,
+            # 未進位的報酬%：文章正文寫整數，存檔的一位小數若剛好是 .5（例 859.5）會進錯方向
+            "報酬% P5_精確": exact["P5"], "報酬% 中位_精確": exact["中位"], "報酬% P95_精確": exact["P95"]}
 
 
 def main():

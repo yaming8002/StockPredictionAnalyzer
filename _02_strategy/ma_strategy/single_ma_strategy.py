@@ -2,7 +2,7 @@
 單一均線突破策略（single MA breakout）— ma_strategy 套件下的方案
 
 繼承 VbtSingleStrategy，只記錄「判定日」買賣條件（隔日開盤成交、費稅、tick 由基底處理）：
-  進場：突破單一 MA。**目前啟用 = opt13（突破後回測支撐反轉）；歷來最優 = opt11（#7 強 K 突破 + #10 突破前 ADX<20）**。
+  進場：突破單一 MA。**目前啟用 = opt13（突破後回測支撐反轉）；帳面 PF 最佳 = opt1（雙日確認）、MA200 EV/筆 最高 = opt8（#7 強 K + 雙日確認）**。
         其餘優化以註解保留可重啟；把進場優化全註解掉 → 回 baseline（突破當日判定）。
   出場：收盤「下穿」單一 MA（跌破）。
   成交：判定日的「隔日開盤」（基底統一，有訊號一律隔日成交、不在訊號當日收盤）。
@@ -13,29 +13,28 @@
   期數來源：自動偵測資料欄位 sma_<N>；偵測不到才用 DEFAULT_PERIODS。
 
 優化紀錄（#N = 改動序號，依測試先後；切換靠 buy_signal 內「# 優化 #N」註解，各 #N 獨立可疊加；
-         結果以 MA=200「EV/筆 → / PF →」，baseline = 194 / 1.62。完整見 reference/single_ma/）：
-  #1 雙日確認        → 221 / 1.60   小幅，後被 #7 超越
-  #2 量能濾網        → 168 / 1.36（量增）、156 / 1.37（只門檻）  ❌ 砍低流動肥尾
-  #3 CMF>0.1         → 224 / 1.52   △ 長均線 EV 升、PF 混、輸 #7
-  #4 距離出場        → −34 / 0.87   ❌ 失敗，砍贏家全 MA 由賺轉賠（別砍贏家）
-  #5 整理+帶量       → 104 / 1.27   ❌ 輸 baseline
-  #6 在MA下方+帶量   → 127 / 1.31   ❌ 扣分元兇＝帶量
-  #7 強 K 突破       → 282 / 1.73   ✅ 順動能、全 MA 提升【採用】
-  #8 #7+雙日確認     → 240 / 1.55   △ 不如 #7 單獨
-  #9 #7+回檔確認     → 176 / 1.48   ❌ 濾掉不回頭飆股
-  #10 盤整後 ADX     → 207 / 1.69（<25）、249 / 1.85（<20）  ○ 順動能補位
-  #11 #7+#10(ADX<20) → 438 / 2.23   ✅✅ 全測試最佳【採用＝目前啟用】
-  #12 #11+流動性門檻 → 87 / 1.23（>1000張）、136 / 1.36（>300張）
+         結果以 MA=200「EV/筆 → / PF →」，baseline = 155 / 1.49。2002–2025 重跑數字，完整見 reference/single_ma/）：
+  #1 雙日確認        → 247 / 1.67   ✅ PF 全測試最高（MA10~200，MA120 除外）、MA≥20 總獲利也升
+  #2 量能濾網        → 177 / 1.38（量增）、164 / 1.39（只門檻）  ❌ 砍低流動肥尾
+  #3 CMF>0.1         → 240 / 1.57   △ MA50~120 EV/筆 全測試最高，但交易數只剩 #1 的 15~21%
+  #4 距離出場        → −20 / 0.92   ❌ 失敗，砍贏家全 MA 由賺轉賠（別砍贏家）
+  #5 整理+帶量       → 104 / 1.26   ❌ 輸 baseline
+  #6 在MA下方+帶量   → 140 / 1.34   ❌ 扣分元兇＝帶量
+  #7 強 K 突破       → 183 / 1.48   △ 勝率全升、EV/筆 MA≥20 升，但 PF 在 MA≥50 低於 baseline
+  #8 #7+雙日確認     → 263 / 1.61   ○ 全勝 #7；MA200 EV/筆 全測試最高
+  #9 #7+回檔確認     → 190 / 1.52   △ MA≥20 EV/筆 勝 baseline，交易數只剩 15~20%
+  #10 盤整後 ADX     → 125 / 1.42（<25）、122 / 1.42（<20）  ❌ 與 baseline 相近或略差
+  #11 #7+#10(ADX<20) → 169 / 1.48   △ 未見加成（PF 在 MA≥60 不及 baseline）
+  #12 #11+流動性門檻 → 107 / 1.29（>1000張）、145 / 1.39（>300張）
   #13 突破後回測支撐反轉 → 自成一格進場(近 n 根突破→觸碰根低點貼 MA±2%→反轉根陽線、實體>觸碰根、收盤站回 MA，隔日買)。
-       無門檻：全 MA 輸 baseline(EV 僅 1/4~1/5)；加「5日均量>100萬股」後翻轉——可成交宇宙每筆 EV 在 MA≥50 勝 baseline
-       (MA200 高 79%)，但 baseline 靠筆數多、總獲利多數仍小勝。短均線(5/10/20)兩者皆負/貼0。
-       全表詳見 docs/reference/single_ma/2026-06-23_opt13_pullback_reversal.md【目前啟用】
-  （另：多頭排列突破已併入 ma_cross_strategy.py 的 ALIGN 旗標，測試 ❌ 不優於 baseline）
+       無門檻 → 196 / 1.58：MA≥10 的 EV/筆、PF 皆勝 baseline，但交易數約為 baseline 的一半，MA≥50 總獲利仍輸
+       baseline（MA200 1,301 vs 2,052 萬）；MA5 兩者皆負。加「5日均量>100萬股」→ 136 / 1.32，MA20 以下 EV/筆 轉負。
+       （數字取自 single_ma_sweep 的 result/single_ma/opt13、opt13_liq）【目前啟用】
+  （另：多頭排列已改由 ma_cross_strategy.py 的 ALIGN 旗標處理，定義與結果見該檔）
 
-⚠️ 重大但書（流動性體檢）：#11 賣出日成交量中位僅 ~210 張、約 30% < 50 張（賣不掉）。加可成交
-   底線(5日均量>300張)後 edge 大幅蒸發（MA200 PF 2.23→1.36）→ 帳面績效大半來自賣不掉的低流動
-   小型股肥尾；可成交真實 edge 薄（長均線 PF~1.3），不宜當大資金主力。後續測試一律帶「5日均量>300張」
-   底線。（完整彙整屬作者內部回測紀錄，未隨本公開鏡像釋出。）
+⚠️ 重大但書（流動性體檢）：#11 賣出日成交量中位僅 204~225 張、約 3 成 < 50 張（賣不掉）、逾半 < 300 張。
+   加可成交底線(5日均量>300張)後 MA200 PF 1.48→1.39、EV/筆 169→145，每筆 edge 只小降，但交易數砍半、總獲利大減；
+   可成交版長均線 PF 約 1.3~1.4、中短均線約損益兩平，不宜當大資金主力。後續測試一律帶「5日均量>300張」底線。
 
 執行（全市場單一 MA，掃整個資料夾、彙總；結果寫策略同目錄 ./result）：
   優化 #1（預設，# 優化 #1 行不註解）：
@@ -56,7 +55,7 @@ if _project_root not in sys.path:
 
 import pandas as pd
 
-from _01_data.indicators_trend import calculate_sma
+from _01_data.indicators_trend import calculate_sma, calculate_adx
 from _01_data.indicators_momentum_volume import calculate_cmf
 from _01_data.indicators_volatility import calculate_atr_pct
 from _02_strategy.base.vbt import batch
@@ -108,7 +107,7 @@ class SingleMAStrategy(VbtSingleStrategy):
     MA_PERIOD = 20
 
     def add_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """均線/CMF/ATR% 引用 _01_data 指標；量能均線/K線/ADX 無對應 indicators 故自算。"""
+        """均線/CMF/ATR%/ADX 引用 _01_data 指標；量能均線/K線無對應 indicators 故自算。"""
         n = self.MA_PERIOD
         df["ma"] = _ma(df, n)                                   # 引用 sma（_01_data）
         df["vol_ma5"] = df["volume"].rolling(5).mean()         # 量能均線無對應 indicators，保留自算
@@ -128,19 +127,8 @@ class SingleMAStrategy(VbtSingleStrategy):
         # opt7：突破那根 K 線的強度（二選一）—— 長紅(開→收>=5%) 或 跳空開在均線之上
         df["long_red"] = df["close"] >= df["open"] * 1.05
         df["gap_over_ma"] = (df["open"] > df["ma"]) & (df["open"] > df["close"].shift(1))
-        # opt10：ADX(14)（Wilder）—— 自算不靠預存欄位。ADX<25 表趨勢弱/盤整
-        high, low, close = df["high"], df["low"], df["close"]
-        prev_c = close.shift(1)
-        up = high.diff(); dn = -low.diff()
-        plus_dm = up.where((up > dn) & (up > 0), 0.0)
-        minus_dm = dn.where((dn > up) & (dn > 0), 0.0)
-        tr14 = pd.concat([high - low, (high - prev_c).abs(), (low - prev_c).abs()], axis=1).max(axis=1)
-        p = 14
-        atr_w = tr14.ewm(alpha=1 / p, adjust=False).mean()
-        plus_di = 100 * plus_dm.ewm(alpha=1 / p, adjust=False).mean() / atr_w
-        minus_di = 100 * minus_dm.ewm(alpha=1 / p, adjust=False).mean() / atr_w
-        dx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di)).fillna(0.0)
-        df["adx"] = dx.ewm(alpha=1 / p, adjust=False).mean()
+        # opt10：ADX(14)（Wilder），引用 _01_data 的 calculate_adx（寫入 df["adx"]）。ADX<25 表趨勢弱/盤整
+        calculate_adx(df, 14)
         # opt13：突破後回測支撐反轉（pullback-to-MA reversal）所需欄位
         #   突破事件 = close 由下而上穿越 MA；had_breakout = 近 n 根內曾突破過（多頭脈絡前提）
         cross_up = (df["close"] > df["ma"]) & (df["close"].shift(1) <= df["ma"].shift(1))
@@ -158,7 +146,7 @@ class SingleMAStrategy(VbtSingleStrategy):
         目前啟用 = 優化 #13（突破後回測支撐反轉，見下方 3 行）：近 n 根曾突破 MA → 觸碰根低點
             貼 MA±2% → 反轉根為陽線、實體大於觸碰根、收盤站回 MA。自成一格進場、不疊在突破當日上，
             故啟用時 #7/#10 一併關閉。
-        歷來最優 = opt11 = #7（強 K 突破）+ #10（突破前 ADX<20）；還原此兩行、關 #13 即回 opt11。
+        opt11 = #7（強 K 突破）+ #10（突破前 ADX<20）；還原此兩行、關 #13 即回 opt11（2002 重跑後已非最優，見檔頭「優化紀錄」）。
         其餘（#1 雙日確認、#2 量能、#3 CMF、#5 整理+帶量、#6 MA 下方+帶量、#9 回檔）皆測試後
             不採用、以註解保留可重啟；全部進場優化註解掉 = baseline。
 
@@ -175,7 +163,7 @@ class SingleMAStrategy(VbtSingleStrategy):
         touch = df["low_near_ma"].shift(1)                                           # 觸碰根 A=B-1 最低點貼 MA±2%
         signal = breakout_ctx & touch & (df["close"] > df["open"]) & (df["body"] > df["body"].shift(1)) & (df["close"] > df["ma"])  # 優化 #13
         # signal = signal & (df["vol_ma5"] > 300_000)  # 優化 #12：5 日均量 > 30 萬股(=300張) 流動性門檻（測試用，暫關回 opt11）
-        # signal = above & signal.shift(1, fill_value=False)   # 優化 #1：雙日確認（疊 opt7 後反不如 opt7 單獨，預設關。取消註解＝強突破隔日仍站上才買 = opt8）
+        # signal = above & signal.shift(1, fill_value=False)   # 優化 #1：雙日確認（預設關。疊在 #7 上＝強突破隔日仍站上才買 = opt8，全勝 opt7）
         # signal = signal.shift(1, fill_value=False) & (df["open"] > df["close"]) & above   # 優化 #9：opt7 隔天收黑但沒跌破 MA → 再隔一天買（測試後不採用，預設關）
         # 以下為測試後不採用的進場濾網（皆輸 baseline，保留可重啟）：
         # signal = signal & (df["vol_ma5"] > 1_000_000)        # 優化 #2：量能濾網（不採用，見 reference 2026-06-15 opt2）

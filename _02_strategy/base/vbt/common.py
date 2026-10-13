@@ -192,7 +192,10 @@ def tw_tick_arr(prices) -> np.ndarray:
         [0.01, 0.05, 0.1, 0.5, 1.0],
         default=5.0,
     )
-    return np.round(np.ceil(p / tick) * tick, 2)
+    # 先把 p/tick 四捨五入到 9 位小數再進位：vbt 回傳的成交均價帶浮點誤差
+    # （例：開盤 982 會回 982.0000000000001），直接 ceil 會多進一檔；
+    # 同理也讓「對已進位的價再進位一次」保持不變（冪等）。
+    return np.round(np.ceil(np.round(p / tick, 9)) * tick, 2)
 
 
 def reconstruct_fees(buy_price, sell_price, qty):

@@ -13,7 +13,8 @@
     （c）每筆買進「金額＋手續費」不超過當筆目標投入（fixed 才檢查，比例的目標隨權益變動）。
     並列出同一組設定在舊口徑（vbt）與新口徑（tw）的最終權益、本金＋總獲利，看改版前後差多少。
 
-執行：python _03_multi_strategy/base/verify_fast_multi.py [--limit 300]
+執行：python _03_multi_strategy/base/verify_fast_multi.py [--limit N]
+    預設全市場（2,258 檔，排 GLITCH）；--limit N 只取前 N 檔做快檢，0 也視為全市場。
 """
 import argparse
 import os
@@ -124,10 +125,10 @@ def check_tw(panel: dict, prio: np.ndarray) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--limit", type=int, default=300)
+    ap.add_argument("--limit", type=int, default=None, help="只取前 N 檔快檢；省略或 0＝全市場")
     a = ap.parse_args()
 
-    data = load_all(a.limit)
+    data = load_all(a.limit or None)
     builder = MultiMACD()
     builder.BASE, builder.ENTRY, builder.PRIO = "cross", "none", "low_price"
     panel = builder.build_panel(data, DEFAULT_START, DEFAULT_END)
