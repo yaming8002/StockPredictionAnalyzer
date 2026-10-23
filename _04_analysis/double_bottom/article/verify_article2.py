@@ -2,7 +2,7 @@
 """
 驗〈雙底（二）：進場的優化〉的表格與正文數字，全部由資料重算後比對；錯誤 0 才算過。
 
-1. 表格：文章裡的 8 張表（基本版總覽、6 條條件、總表）必須與 build_article2_tables 由逐筆交易
+1. 表格：文章裡的 7 張表（基本版總覽、5 條型態條件、總表）必須與 build_article2_tables 由逐筆交易
    重算的 HTML 逐字相同（數字、位數、底色 class 都在內）。
 2. 正文主張：每條數字敘述在這裡重算（區間、單調、六格方向、比例……），判斷式必須成立，
    格式化後的字串必須逐字出現在文章裡。
@@ -51,7 +51,6 @@ def claims(df) -> list:
     effp = lambda e, p: [cell(df, e, p, liq, "生效率%") for liq in (False, True)]
     win_diff = [a - b for a, b in six(df, "neck", "勝率%")]
     neck_n = [a / b for a, b in six(df, "neck", "交易次數")][:3]
-    align_n = [a / b for a, b in six(df, "align", "交易次數")]
     out = [
         # 頸線突破
         ("頸線 生效率範圍", True, f"生效率在 {pct_range(eff('neck'))}"),
@@ -84,39 +83,43 @@ def claims(df) -> list:
          ups("rise") == [False, False, True, False, False, True]
          and all(abs(a - b) < 0.015 for (a, b), u in zip(six(df, "rise", "獲利因子"), ups("rise")) if u),
          "只有 9% 兩種口徑比基本版高"),
-        # 站上年線
-        ("年線 六格皆降、裸版降得多",
-         not any(ups("ma200")) and all(
-             (b1 - a1) > (b2 - a2) for (a1, b1), (a2, b2)
-             in zip(six(df, "ma200", "獲利因子")[:3], six(df, "ma200", "獲利因子")[3:])),
-         f"裸版降得比較多（3%：{pf('base', 3, False)} → {pf('ma200', 3, False)}），"
-         f"可成交版降得比較少（9%：{pf('base', 9, True)} → {pf('ma200', 9, True)}）"),
-        ("年線 生效率", True, f"生效率在 {pct_range(eff('ma200'))}"),
-        # 均線多頭排列
-        ("多頭排列 生效率", True, f"生效率 {pct_range(eff('align'))}"),
-        ("多頭排列 3% 降、6/9% 升", ups("align") == [False, True, True, False, True, True],
-         f"3% 兩種口徑的獲利因子都比基本版低（裸版 {pf('base', 3, False)} → {pf('align', 3, False)}），"
-         f"6%、9% 四格都比較高（9% 裸版 {pf('base', 9, False)} → {pf('align', 9, False)}）"),
-        ("多頭排列 筆數比例與總獲利皆少",
-         all(a < b for a, b in six(df, "align", "總獲利(萬)")),
-         f"筆數只剩約一半（{half_up(min(align_n) * 100, 0)}%～{half_up(max(align_n) * 100, 0)}%）"),
-        # 放量
-        ("放量 生效率且 3% 最多",
-         min(effp("volume", 3)) > max(effp("volume", 6) + effp("volume", 9)),
-         f"生效率在 {pct_range(eff('volume'))}，3% 擋得最多"),
-        ("放量 只有 6% 兩格升", ups("volume") == [False, True, False, False, True, False],
-         f"3% 可成交那格降得最多（{pf('base', 3, True)} → {pf('volume', 3, True)}）"),
-        ("放量 3% 可成交是降幅最大的一格",
-         min(range(6), key=lambda i: six(df, "volume", "獲利因子")[i][0] - six(df, "volume", "獲利因子")[i][1]) == 3,
-         "降得最多"),
-        ("放量 勝率六格皆升", all(ups("volume", "勝率%")),
-         f"勝率六格都略升（例：3% 裸版 {one('base', 3, False, '勝率%')}% → {one('volume', 3, False, '勝率%')}%）"),
+        # 前段跌幅
+        ("跌幅 3% 生效率", min(effp("drop", 3)) > 84.5, f"3% 擋掉 {pct_range(effp('drop', 3))}"),
+        ("跌幅 6% 生效率", True, f"6% 擋掉 {pct_range(effp('drop', 6))}"),
+        ("跌幅 9% 生效率", True, f"9% 擋掉 {pct_range(effp('drop', 9))}"),
+        ("跌幅 只有 3% 兩格升、勝率也升",
+         ups("drop") == [True, False, False, True, False, False]
+         and ups("drop", "勝率%")[0] and ups("drop", "勝率%")[3],
+         f"（裸版 {pf('base', 3, False)} → {pf('drop', 3, False)}、可成交 {pf('base', 3, True)} → {pf('drop', 3, True)}），勝率也跟著升"),
+        ("跌幅 9% 可成交", True, f"（9% 可成交 {pf('base', 9, True)} → {pf('drop', 9, True)}）"),
+        ("跌幅 3% 裸版筆數", True,
+         f"只剩下約 {half_up(cell(df, 'drop', 3, False, '交易次數') / 1e4, 1)} 萬筆"
+         f"（基本版約 {half_up(cell(df, 'base', 3, False, '交易次數') / 1e4, 1)} 萬筆）"),
+        # 型態高度
+        ("高度 3% 生效率", min(effp("height", 3)) > 84, f"3% 擋掉約 85%（{pct_range(effp('height', 3))}）"),
+        ("高度 6% 生效率", True, f"6% 約 {pct_range(effp('height', 6))}"),
+        ("高度 9% 生效率", max(effp("height", 9)) < 2,
+         f"9% 只有 {half_up(min(effp('height', 9)), 1)}%～{half_up(max(effp('height', 9)), 1)}%"),
+        ("高度 9% 門檻下頸線下限 = 1/0.91 < 1.10", 1 / 0.91 < 1.10 and str(half_up(1 / 0.91, 3)) == "1.099", "約 × 1.099"),
+        ("高度 3%/6% 四格降、3% 降最多",
+         ups("height")[:2] == [False, False] and ups("height")[3:5] == [False, False]
+         and cell(df, "height", 3, True, "獲利因子") < 1,
+         f"（裸版 {pf('base', 3, False)} → {pf('height', 3, False)}、可成交 {pf('base', 3, True)} → {pf('height', 3, True)}，可成交那格跌破 1）"),
+        ("高度 3% 裸版勝率降", not ups("height", "勝率%")[0],
+         f"3% 裸版 {half_up(cell(df, 'base', 3, False, '勝率%'), 1)}% → {half_up(cell(df, 'height', 3, False, '勝率%'), 1)}%"),
+        ("高度 9% 可成交只高一點且顯示相同",
+         0 < cell(df, "height", 9, True, "獲利因子") - cell(df, "base", 9, True, "獲利因子") < 0.001
+         and pf("height", 9, True) == pf("base", 9, True),
+         f"可成交只高 {half_up(cell(df, 'height', 9, True, '獲利因子') - cell(df, 'base', 9, True, '獲利因子'), 4)}，表上顯示一樣"),
         # 總結
         ("總表：頸線 6 升", sum(ups("neck")) == 6, "**頸線突破**六格都比基本版高"),
-        ("總表：多頭排列 4 升", sum(ups("align")) == 4, "**均線多頭排列** 4 格高、2 格低"),
-        ("總表：間隔／墊高／放量 2 升",
-         sum(ups("gap")) == sum(ups("rise")) == sum(ups("volume")) == 2, "都是 2 格高、4 格低"),
-        ("總表：年線 0 升", sum(ups("ma200")) == 0, "**站上年線**六格都比基本版低"),
+        ("總表：間隔／墊高／跌幅 2 升",
+         sum(ups("gap")) == sum(ups("rise")) == sum(ups("drop")) == 2, "都是 2 格高、4 格低"),
+        ("總表：高度 1 升", sum(ups("height")) == 1,
+         f"**型態高度** 1 格高、5 格低，高的那格只差 "
+         f"{half_up(cell(df, 'height', 9, True, '獲利因子') - cell(df, 'base', 9, True, '獲利因子'), 4)}"),
+        ("總表：跌幅／高度 3% 皆擋 > 84%",
+         min(effp("drop", 3) + effp("height", 3)) > 84, "在 3% 都擋掉八成五左右的訊號"),
     ]
     return out
 

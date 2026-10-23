@@ -8,6 +8,7 @@ double_bottom_variants.py（逐字抄策略檔 # 優化 #2～#7）。基本版�
 （被擋掉的判定比例；頸線突破是「沒有突破就作廢」的比例）；另有期末未平倉。
 
 執行：python _02_strategy/double_bottom_strategy/entry_filter_sweep.py [--workers 4] [--limit N] [--out <根目錄>]
+      [--entries base drop height ...] [--summary-name _sweep_summary_add4.csv]
 輸出：result/single_double_bottom_entry/p<門檻>_<raw|liq1000>__<變體>/、_sweep_summary.csv
 """
 import argparse
@@ -53,8 +54,13 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--out", default=RESULT_DIR)
+    ap.add_argument("--entries", nargs="+", default=list(ENTRY_FILTERS), choices=list(ENTRY_FILTERS),
+                    help="只跑這幾個變體（預設全部；base 一定要在，生效率以它為分母）")
+    ap.add_argument("--summary-name", default="_sweep_summary.csv")
     a = ap.parse_args()
-    jobs = [(p, liq, e, a.limit, a.out) for p in PCTS for liq in (False, True) for e in ENTRY_FILTERS]
+    if "base" not in a.entries:
+        raise SystemExit("--entries 必須包含 base（生效率的分母、也是同批次基準）")
+    jobs = [(p, liq, e, a.limit, a.out) for p in PCTS for liq in (False, True) for e in a.entries]
     rows = []
     with ProcessPoolExecutor(max_workers=a.workers) as pool:
         for f in as_completed([pool.submit(_job, j) for j in jobs]):
@@ -67,7 +73,7 @@ def main() -> int:
     df["生效率%"] = [round((1 - r["signals"] / base.loc[(r["門檻%"], r["可成交"])]) * 100, 2)
                     for _, r in df.iterrows()]
     df["未平倉率%"] = (df["open_at_end"] / df["entries"] * 100).round(2)
-    out = os.path.join(a.out, SUB, "_sweep_summary.csv")
+    out = os.path.join(a.out, SUB, a.summary_name)
     df.sort_values(["可成交", "門檻%", "變體"]).to_csv(out, index=False, encoding="utf-8-sig")
     print(f"→ {out}")
     return 0

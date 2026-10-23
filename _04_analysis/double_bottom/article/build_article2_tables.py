@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-產生〈雙底（二）：進場的優化〉的表格 HTML（基本版總覽、6 條條件各一張、最後的獲利因子總表）。
+產生〈雙底（二）：進場的優化（上）〉的表格 HTML（基本版總覽、5 條型態條件各一張、最後的獲利因子總表）。
+文章只收跟雙底型態本身有關的 5 條（#2 頸線突破、#3 兩底間隔、#4 第二底墊高、#8 前段跌幅、#9 型態高度）；
+#5～#7、#10、#11 在〈雙底（三）〉（build_article3_tables.py，共用本檔函式）。
 
 資料來源＝SPA 單股回測輸出（`_02_strategy/double_bottom_strategy/entry_filter_sweep.py`）：
   result/single_double_bottom_entry/p<3|6|9>_<raw|liq1000>__<base|neck|gap|rise|ma200|align|volume>/
@@ -31,7 +33,7 @@ from _03_multi_strategy.base.fast_multi import EXACT, exact_stats  # noqa: E402
 SRC = os.path.join(RESULT_DIR, "single_double_bottom_entry")
 STATS_FILE = os.path.join(SRC, "_article2_stats.csv")
 PCTS = (3, 6, 9)
-ENTRIES = ("base", "neck", "gap", "rise", "ma200", "align", "volume")
+ENTRIES = ("base", "neck", "gap", "rise", "drop", "height")   # 文章只收型態條件（2026-10-21 用戶定）
 COLS = ["交易次數", "勝率%", "平均持有天", "獲利平均%", "虧損平均%", "中位數%", "期望值/筆", "獲利因子", "總獲利(萬)"]
 PAINT = ("勝率%", "獲利平均%", "中位數%", "期望值/筆", "獲利因子")
 HEAD = ("<thead><tr><th>版本</th><th>交易次數</th><th>勝率%</th><th>平均持有天</th><th>獲利平均%</th>"
@@ -57,11 +59,12 @@ def fmt(col: str, v) -> str:
     return (f"{q:,}" if nd_of(col) == 0 else f"{q}").replace("-", "−")
 
 
-def stats() -> pd.DataFrame:
+def stats(entries=ENTRIES) -> pd.DataFrame:
+    """entries 讓〈雙底（三）〉的 build_article3_tables 共用同一套算法（必含 base，生效率要對它算）。"""
     rows = []
     for liq in (False, True):
         for p in PCTS:
-            for e in ENTRIES:
+            for e in entries:
                 tag = f"p{p}_{'liq1000' if liq else 'raw'}__{e}"
                 folder = os.path.join(SRC, tag)
                 tr = pd.read_csv(os.path.join(folder, f"single_double_bottom_{tag}_trades.csv"))
@@ -109,15 +112,18 @@ def table(df: pd.DataFrame, entry: str) -> str:
 
 
 LABELS = {"base": "基本版", "neck": "頸線突破", "gap": "兩底間隔 ≥ 10 天", "rise": "第二底墊高 ≥ 2%",
-          "ma200": "站上年線", "align": "均線多頭排列", "volume": "放量 1.5 倍"}
+          "drop": "前段跌幅 ≥ 15%", "height": "型態高度 ≥ 10%",
+          # 〈雙底（三）〉用
+          "ma200": "站上年線", "align": "長線多頭排列", "volume": "放量 1.5 倍",
+          "volshrink": "第二底量縮", "bullbar": "確認日紅 K／長下影線"}
 
 
-def summary_table(df: pd.DataFrame) -> str:
+def summary_table(df: pd.DataFrame, entries=ENTRIES) -> str:
     """總表：各條件 6 格的獲利因子＋比基本版高的格數＋生效率範圍（不上色）。"""
     head = ("<thead><tr><th>進場條件</th><th>3%</th><th>6%</th><th>9%</th><th>3%<br>可成交</th>"
             "<th>6%<br>可成交</th><th>9%<br>可成交</th><th>比基本版高</th><th>生效率%</th></tr></thead>")
     out = ['<div class="table-wrap"><table class="bt-table">', head, "<tbody>"]
-    for e in ENTRIES:
+    for e in entries:
         pfs, ups = [], 0
         for liq in (False, True):
             for p in PCTS:

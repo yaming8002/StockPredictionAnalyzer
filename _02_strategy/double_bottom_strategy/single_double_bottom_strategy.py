@@ -30,9 +30,18 @@
     遇到相同低價會更新的寫法），只用確認日當天以前的資料。
   # 優化 #4 第二底墊高幅度：L2 ≥ L1 × RISE_MIN。
   # 優化 #5 站上年線：判定日收盤 > MA200（同 MACD 系列條件⑥）。
-  # 優化 #6 均線多頭排列：MA5 > MA20 > MA60（同 KD／MACD 系列已發佈的定義）。
+  # 優化 #6 長線多頭排列：MA20 > MA60 > MA120。2026-10-22 用戶改定，原本是 MA5 > MA20 > MA60（同 KD／MACD
+    系列已發佈的定義）；改的理由：雙底是打底，第二個底確認時短均線 MA5 必然下彎，短線多頭會擋掉太多。
+    舊定義保留在 add_columns 的註解行，舊結果在 result/single_double_bottom_entry/p*__align_ma5/。
   # 優化 #7 放量確認：判定日成交量 > 20 日均量 × 1.5（同 MACD 系列條件③）。
-  #5～#7 的判定日＝第二個底的確認日。全部條件只用判定日當下已知資訊（截斷測試見 verify_entry_no_lookahead.py）。
+  （2026-10-21 追加 #8～#11，判定日一樣是第二個底的確認日）
+  # 優化 #8 前段跌幅：第一個底之前，從前一個已確認擺動高點跌到第一個底的幅度 ≥ PRIOR_DROP_MIN。
+  # 優化 #9 型態高度：頸線 ≥ 兩個底中較高者 × NECK_HEIGHT_MIN。
+  # 優化 #10 第二底量縮：第二個底附近的平均量 < 第一個底附近的平均量。「附近」＝以極值日為中心前後
+    VOL_HALF 根（共 5 根），但**不超過該底的確認日**——極值日之後的 K 棒在確認日當下可能還沒發生，
+    所以第二個底的窗口在「確認日 − 極值日 < 2」時會被截短。極值日推法同 #3。
+  # 優化 #11 確認日 K 棒：確認日收紅 K（收盤 > 開盤），或長下影線（下影線 ≥ 實體 × 2 且 ≥ 全日振幅 ÷ 3），任一。
+  #5～#11 的判定日＝第二個底的確認日。全部條件只用判定日當下已知資訊（截斷測試見 verify_entry_no_lookahead.py）。
   全組合掃描用 double_bottom_variants.py（條件式逐字抄這裡的註解行）。
 
 附錄（舊版，2026-10-16 第一輪，結果在 result/single_double_bottom_v1_dtop/）：出場是「CHoCH 二選一
@@ -77,22 +86,37 @@ GAP_MIN = 10              # 優化 #3：兩個底的極值日至少相隔幾個�
 RISE_MIN = 1.02           # 優化 #4：第二個底至少比第一個底高 2%
 MA_LONG = 200             # 優化 #5：年線
 VOL_WINDOW, VOL_MULTIPLE = 20, 1.5   # 優化 #7：量 > 20 日均量 × 1.5
+PRIOR_DROP_MIN = 0.15     # 優化 #8：第一個底之前的跌幅 ≥ 15%
+NECK_HEIGHT_MIN = 1.10    # 優化 #9：頸線 ≥ 較高的底 × 1.10
+VOL_HALF = 2              # 優化 #10：底的極值日前後各 2 根（共 5 根）平均量
 
 
-def double_bottom_context(close: np.ndarray, turn_low: np.ndarray, turn_high: np.ndarray):
+def _vol_near(volume: np.ndarray, ext_day: int, confirm_day: int) -> float:
+    """極值日前後 VOL_HALF 根的平均量，右端不超過確認日（之後的量在確認當下還不知道）。"""
+    lo, hi = max(0, ext_day - VOL_HALF), min(ext_day + VOL_HALF, confirm_day)
+    return float(np.nanmean(volume[lo:hi + 1]))
+
+
+def double_bottom_context(close: np.ndarray, turn_low: np.ndarray, turn_high: np.ndarray,
+                          volume: np.ndarray = None):
     """
     在每個「擺動低點確認日」記下雙底需要的資訊（其餘日 NaN），全部只用確認日當天以前的資料：
       l1      ：前一個已確認擺動低點
       gap     ：前一個低點與這個低點「極值日」相隔的交易日數
       neck    ：兩個低點之間最近一個已確認的擺動高點（頸線）
+    給了 volume 時另外回傳（#8、#10 用）：
+      drop1   ：第一個底之前那個已確認擺動高點跌到第一個底的幅度（(H0 − L1) ÷ H0）
+      vol1／vol2：第一／第二個底附近的平均量（_vol_near）
     極值日＝該段下跌腿（上一次任何轉折的確認日 ～ 本次確認日）裡收盤最低的最後一天。
     """
     n = len(close)
     l1 = np.full(n, np.nan)
     gap = np.full(n, np.nan)
     neck = np.full(n, np.nan)
+    drop1, vol1, vol2 = np.full(n, np.nan), np.full(n, np.nan), np.full(n, np.nan)
     last_turn = 0                 # 上一次任何轉折（高或低）的確認日
     prev_low_val, prev_low_day = np.nan, -1
+    prev_low_drop, prev_low_vol = np.nan, np.nan
     last_high_val, last_high_day = np.nan, -1
     for i in range(n):
         if not np.isnan(turn_high[i]):
@@ -102,14 +126,21 @@ def double_bottom_context(close: np.ndarray, turn_low: np.ndarray, turn_high: np
             leg = close[last_turn:i + 1]
             # 收盤有缺值（NaN）的檔：calculate_zigzag 比較時跳過 NaN，這裡也用 nanmin 才找得到同一個極值
             ext_day = last_turn + int(np.flatnonzero(leg == np.nanmin(leg))[-1])
+            # 這個低點自己的「前段跌幅」與「附近量」，等它變成下一組的第一個底時使用
+            my_drop = (last_high_val - turn_low[i]) / last_high_val if last_high_day >= 0 else np.nan
+            my_vol = _vol_near(volume, ext_day, i) if volume is not None else np.nan
             if prev_low_day >= 0:
                 l1[i] = prev_low_val
                 gap[i] = ext_day - prev_low_ext
                 if last_high_day > prev_low_day:          # 兩個底之間確認過的高點
                     neck[i] = last_high_val
+                drop1[i], vol1[i], vol2[i] = prev_low_drop, prev_low_vol, my_vol
             prev_low_val, prev_low_day, prev_low_ext = turn_low[i], i, ext_day
+            prev_low_drop, prev_low_vol = my_drop, my_vol
             last_turn = i
-    return l1, gap, neck
+    if volume is None:
+        return l1, gap, neck
+    return l1, gap, neck, drop1, vol1, vol2
 
 
 def neckline_breakout(close: np.ndarray, setup: np.ndarray, turn_low: np.ndarray,
@@ -151,14 +182,22 @@ class SingleDoubleBottomStrategy(VbtSingleStrategy):
         calculate_zigzag(df, self.pct)
         close = df["close"]
         df["turnover"] = df["volume"].rolling(5).mean() * close
-        l1, gap, neck = double_bottom_context(close.to_numpy(dtype=float),
-                                              df["zigzag_turn_low"].to_numpy(),
-                                              df["zigzag_turn_high"].to_numpy())
+        l1, gap, neck, drop1, vol1, vol2 = double_bottom_context(
+            close.to_numpy(dtype=float), df["zigzag_turn_low"].to_numpy(),
+            df["zigzag_turn_high"].to_numpy(), df["volume"].to_numpy(dtype=float))
         df["db_l1"], df["db_gap"], df["db_neck"] = l1, gap, neck
+        df["db_drop1"], df["db_vol1"], df["db_vol2"] = drop1, vol1, vol2
+        # 優化 #11：確認日 K 棒（紅 K 或長下影線）
+        body = (df["close"] - df["open"]).abs()
+        lower = df[["open", "close"]].min(axis=1) - df["low"]
+        df["db_bull_bar"] = (df["close"] > df["open"]) | (
+            (lower >= body * 2) & (lower >= (df["high"] - df["low"]) / 3))
         # 進場優化用欄位（全部只看判定日以前）
         df["ma200"] = close.rolling(MA_LONG).mean()
-        df["bull_align"] = ((close.rolling(5).mean() > close.rolling(20).mean())
-                            & (close.rolling(20).mean() > close.rolling(60).mean()))
+        # df["bull_align"] = ((close.rolling(5).mean() > close.rolling(20).mean())     # 舊 #6 MA5>MA20>MA60
+        #                     & (close.rolling(20).mean() > close.rolling(60).mean()))  # 2026-10-22 用戶改定為長線版
+        df["bull_align"] = ((close.rolling(20).mean() > close.rolling(60).mean())
+                            & (close.rolling(60).mean() > close.rolling(120).mean()))
         df["vol_ma20"] = df["volume"].rolling(VOL_WINDOW).mean()
         return df
 
@@ -173,8 +212,12 @@ class SingleDoubleBottomStrategy(VbtSingleStrategy):
         # signal = signal & (df["db_gap"] >= GAP_MIN)                       # 優化 #3 兩底間隔 ≥ 10 個交易日
         # signal = signal & (df["zigzag_turn_low"] >= df["db_l1"] * RISE_MIN)  # 優化 #4 第二底墊高 ≥ 2%
         # signal = signal & (df["close"] > df["ma200"])                     # 優化 #5 站上年線
-        # signal = signal & df["bull_align"]                                # 優化 #6 均線多頭排列 5>20>60
+        # signal = signal & df["bull_align"]                                # 優化 #6 長線多頭排列 20>60>120
         # signal = signal & (df["volume"] > df["vol_ma20"] * VOL_MULTIPLE)  # 優化 #7 放量 1.5 倍
+        # signal = signal & (df["db_drop1"] >= PRIOR_DROP_MIN)              # 優化 #8 前段跌幅 ≥ 15%
+        # signal = signal & (df["db_neck"] >= df["zigzag_turn_low"] * NECK_HEIGHT_MIN)  # 優化 #9 型態高度（L2 為較高者）
+        # signal = signal & (df["db_vol2"] < df["db_vol1"])                 # 優化 #10 第二底量縮
+        # signal = signal & df["db_bull_bar"]                               # 優化 #11 確認日紅 K 或長下影線
         if self.liquidity:
             signal = signal & (df["turnover"] > TURNOVER_MIN)
         return signal.fillna(False).astype(bool)

@@ -6,7 +6,7 @@
 子類在 buy_signal 只把「被選中的那一行」疊在基本版上（比照 kd_variants／macd_variants 的做法）。
 改條件時兩邊要一起改。
 
-變體名：base（基本版，不加任何條件）／neck／gap／rise／ma200／align／volume
+變體名：base（基本版，不加任何條件）／neck／gap／rise／ma200／align／volume／drop／height／volshrink／bullbar
 """
 import os
 import sys
@@ -18,7 +18,8 @@ if _project_root not in sys.path:
 import pandas as pd
 
 from _02_strategy.double_bottom_strategy.single_double_bottom_strategy import (
-    GAP_MIN, RISE_MIN, TURNOVER_MIN, VOL_MULTIPLE, SingleDoubleBottomStrategy, neckline_breakout)
+    GAP_MIN, NECK_HEIGHT_MIN, PRIOR_DROP_MIN, RISE_MIN, TURNOVER_MIN, VOL_MULTIPLE,
+    SingleDoubleBottomStrategy, neckline_breakout)
 
 # 名稱 → (中文標籤, 條件)；條件收 (df, signal) 回傳新的 signal，內容與策略檔註解行逐字相同
 ENTRY_FILTERS = {
@@ -27,8 +28,12 @@ ENTRY_FILTERS = {
     "gap": ("兩底間隔 ≥ 10 天", lambda df, signal: signal & (df["db_gap"] >= GAP_MIN)),                       # 優化 #3
     "rise": ("第二底墊高 ≥ 2%", lambda df, signal: signal & (df["zigzag_turn_low"] >= df["db_l1"] * RISE_MIN)),  # 優化 #4
     "ma200": ("站上年線", lambda df, signal: signal & (df["close"] > df["ma200"])),                            # 優化 #5
-    "align": ("均線多頭排列", lambda df, signal: signal & df["bull_align"]),                                   # 優化 #6
+    "align": ("長線多頭排列", lambda df, signal: signal & df["bull_align"]),                                   # 優化 #6
     "volume": ("放量 1.5 倍", lambda df, signal: signal & (df["volume"] > df["vol_ma20"] * VOL_MULTIPLE)),     # 優化 #7
+    "drop": ("前段跌幅 ≥ 15%", lambda df, signal: signal & (df["db_drop1"] >= PRIOR_DROP_MIN)),               # 優化 #8
+    "height": ("型態高度 ≥ 10%", lambda df, signal: signal & (df["db_neck"] >= df["zigzag_turn_low"] * NECK_HEIGHT_MIN)),  # 優化 #9
+    "volshrink": ("第二底量縮", lambda df, signal: signal & (df["db_vol2"] < df["db_vol1"])),                  # 優化 #10
+    "bullbar": ("確認日紅 K／長下影線", lambda df, signal: signal & df["db_bull_bar"]),                        # 優化 #11
 }
 
 

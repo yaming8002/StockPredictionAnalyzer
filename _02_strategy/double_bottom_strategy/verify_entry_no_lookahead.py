@@ -5,7 +5,7 @@
 （截斷日以前）的進場判定必須逐日相同；任何一天不同＝用到了截斷日之後的資訊。
 另外檢查基本版改寫（zigzag_turn_low > db_l1）與原寫法（低點序列 > 前一個低點）逐日相同。
 
-執行：python _02_strategy/double_bottom_strategy/verify_entry_no_lookahead.py [--limit 200]
+執行：python _02_strategy/double_bottom_strategy/verify_entry_no_lookahead.py [--limit 200] [--entries base drop ...]
 """
 import argparse
 import os
@@ -38,6 +38,8 @@ def old_base(df: pd.DataFrame) -> pd.Series:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=200)
+    ap.add_argument("--entries", nargs="+", default=list(ENTRY_FILTERS), choices=list(ENTRY_FILTERS),
+                    help="只測這幾個變體（預設全部）")
     a = ap.parse_args()
     t0 = time.time()
     bad, checks, sig_days = 0, 0, 0
@@ -48,7 +50,7 @@ def main() -> int:
         n_stock += 1
         common.ensure_columns(raw)
         for pct in PCTS:
-            for entry in ENTRY_FILTERS:
+            for entry in a.entries:
                 v = make_variant(entry, pct, liquidity=True)     # 含可成交門檻（5 日均量也一起測）
                 full_df = v.add_columns(raw.copy())
                 full = v.buy_signal(full_df)
@@ -68,7 +70,7 @@ def main() -> int:
                         bad += 1
                         diff = sub.index[sub != full.loc[:cut]]
                         print(f"NG {sid} {pct} {entry} 截到 {cut}：{len(diff)} 天不同，首日 {diff[0].date()}")
-    print(f"{n_stock} 檔 × {len(PCTS)} 門檻 × {len(ENTRY_FILTERS)} 變體 × {len(CUTOFFS)} 截斷日："
+    print(f"{n_stock} 檔 × {len(PCTS)} 門檻 × {len(a.entries)} 變體 × {len(CUTOFFS)} 截斷日："
           f"比對 {checks:,} 次（截斷段內進場判定 {sig_days:,} 天）｜不一致 {bad}｜{time.time() - t0:.0f} 秒")
     return 1 if bad else 0
 
