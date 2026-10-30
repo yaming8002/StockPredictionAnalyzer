@@ -7,6 +7,7 @@
 改條件時兩邊要一起改。
 
 變體名：base（基本版，不加任何條件）／neck／gap／rise／ma200／align／volume／drop／height／volshrink／bullbar
+出場變體（檔尾 EXIT_RULES）：base／target／target65／neck／neckfail／bolow／breakeven／atr／trail20／ma10／mtop
 """
 import os
 import sys
@@ -54,4 +55,31 @@ def make_variant(entry: str, pct: float, liquidity: bool) -> DoubleBottomEntryVa
         raise ValueError(f"未知的進場變體 {entry}，可用：{list(ENTRY_FILTERS)}")
     v = DoubleBottomEntryVariant(pct=pct, liquidity=liquidity)
     v.ENTRY = entry
+    return v
+
+
+# ── 出場優化 #12～#21（2026-10-29）──────────────────────────────────────────
+# 出場規則本身寫在策略檔 ExtraExit，策略檔用類別屬性 EXIT_RULE 註解切換；掃描時直接設實例的 EXIT_RULE，
+# 不必抄條件式（同 _NoStop 的做法）。名稱 → 中文標籤；base＝不附加任何出場。
+EXIT_RULES = {
+    "base": "基本版",
+    "target": "測幅滿足點",            # 優化 #12
+    "target65": "打折測幅 0.65",       # 優化 #13
+    "neck": "頸線停利",                # 優化 #14
+    "neckfail": "突破後跌回頸線",      # 優化 #15
+    "bolow": "跌破突破 K 棒低點",      # 優化 #16
+    "breakeven": "保本停損",           # 優化 #17
+    "atr": "ATR 移動停損 3×ATR",       # 優化 #18
+    "trail20": "自高點回落 20%",       # 優化 #19
+    "ma10": "跌破 MA10",               # 優化 #20
+    "mtop": "高檔 M 頭",               # 優化 #21
+}
+
+
+def make_exit_variant(rule: str, pct: float, liquidity: bool) -> SingleDoubleBottomStrategy:
+    """進場基本版（＋可成交門檻），出場＝①② ＋ rule 那一條（base＝不附加）。"""
+    if rule not in EXIT_RULES:
+        raise ValueError(f"未知的出場變體 {rule}，可用：{list(EXIT_RULES)}")
+    v = SingleDoubleBottomStrategy(pct=pct, liquidity=liquidity)
+    v.EXIT_RULE = None if rule == "base" else rule
     return v

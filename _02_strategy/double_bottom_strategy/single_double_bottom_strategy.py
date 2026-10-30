@@ -44,6 +44,23 @@
   #5～#11 的判定日＝第二個底的確認日。全部條件只用判定日當下已知資訊（截斷測試見 verify_entry_no_lookahead.py）。
   全組合掃描用 double_bottom_variants.py（條件式逐字抄這裡的註解行）。
 
+  出場優化（2026-10-29 加入；進場固定基本版，每條單獨「附加」在 ①② 上、先觸發者算，切換＝類別屬性
+  EXIT_RULE 那幾行一次只開一行）。頸線＝進場判定日的 db_neck；型態高度＝頸線 − 第一個底（第二個底較高，
+  第一個底就是最低點）；進場價＝判定日隔天開盤。來源整理見 blog/reference/double_bottom/ 出場紀錄。
+  # 優化 #12 測幅滿足點：收盤 ≥ 頸線 ＋ 型態高度。
+  # 優化 #13 打折測幅（Bulkowski）：收盤 ≥ 頸線 ＋ 0.65 × 型態高度。
+  # 優化 #14 頸線停利（Bulkowski DB 交易設定）：收盤 ≥ 頸線。進場判定日收盤就已在頸線之上的，隔天就出場。
+  # 優化 #15 突破失敗：持倉中收盤曾 > 頸線，之後收盤 < 頸線。
+  # 優化 #16 跌破突破 K 棒低點：持倉中第一次收盤 > 頸線那天記下當日最低價，之後收盤 < 該價。
+  # 優化 #17 保本停損：持倉中收盤曾 ≥ 進場價 ＋ 型態高度，之後收盤 < 進場價。
+  # 優化 #18 ATR 移動停損：收盤 < 進場後最高價 − 3 × ATR(14)（ATR 取當日；同 MACD 系列吊燈出場）。
+  # 優化 #19 回落 20%：收盤 < 進場後最高價 × 0.80（最高價寫法同 MACD 系列回落 10%）。
+  # 優化 #20 跌破 MA10：收盤由上跌破 MA10（昨收 ≥ 昨日 MA10、今收 < 今日 MA10；寫法同 MACD 系列跌破年線）。
+  # 優化 #21 高檔 M 頭：新確認的擺動高點 < 上一個已確認擺動高點（可在進場前，通常就是頸線）。
+    與 ① 的差別：① 只跟進場以後的高點比。寫法同下方附錄的雙頂，但這裡是附加、不取代 ①。
+  #12～#16 需要頸線：沒有頸線的進場（兩個底之間沒有確認過的高點）這幾條不觸發。
+  診斷多記 exit_new（出場那根新規則成立，含與 ①② 同根）、exit_new_only（只有新規則成立＝搶在 ①② 之前）。
+
 附錄（舊版，2026-10-16 第一輪，結果在 result/single_double_bottom_v1_dtop/）：出場是「CHoCH 二選一
   （① 或 ②）＋雙頂（頂頂低）」——持倉中新確認高點 H2 < 上一個已確認高點 H1 就出場（H1 可能在進場前）。
   持倉中只要出現頂頂低就已出場，所以持倉期間確認的高點一路墊高、「進場以來最高」恆等於「上一個高點」，
@@ -75,6 +92,7 @@ import numpy as np
 import pandas as pd
 
 from _01_data.indicators_pattern import calculate_zigzag
+from _01_data.indicators_volatility import calculate_atr
 from _02_strategy.base.vbt import batch
 from _02_strategy.base.vbt.single import VbtSingleStrategy
 from _02_strategy.base.vbt.common import GLITCH, DEFAULT_START, DEFAULT_END
@@ -89,6 +107,10 @@ VOL_WINDOW, VOL_MULTIPLE = 20, 1.5   # 優化 #7：量 > 20 日均量 × 1.5
 PRIOR_DROP_MIN = 0.15     # 優化 #8：第一個底之前的跌幅 ≥ 15%
 NECK_HEIGHT_MIN = 1.10    # 優化 #9：頸線 ≥ 較高的底 × 1.10
 VOL_HALF = 2              # 優化 #10：底的極值日前後各 2 根（共 5 根）平均量
+TARGET_DISCOUNT = 0.65    # 優化 #13：Bulkowski 測幅打折（他統計到達目標的比率）
+ATR_PERIOD, CHANDELIER_K = 14, 3.0   # 優化 #18：進場後最高價 − 3 × ATR(14)
+TRAIL_DROP = 0.20         # 優化 #19：自進場後最高價回落 20%
+MA_SHORT = 10             # 優化 #20：MA10
 
 
 def _vol_near(volume: np.ndarray, ext_day: int, confirm_day: int) -> float:
@@ -163,11 +185,81 @@ def neckline_breakout(close: np.ndarray, setup: np.ndarray, turn_low: np.ndarray
     return out
 
 
+class ExtraExit:
+    """
+    出場優化 #12～#21 的單筆持倉狀態：進場判定日呼叫 start(i)，持倉中每根呼叫 hit(...)。
+    有狀態的規則（#15～#17 的「曾經突破／曾經賺到」）一律先用前一根為止的狀態判定、再更新，
+    所以當根不會同時觸發與啟動；#18、#19 的最高價含當根（同 MACD 系列 _scan_path_exits）。
+    """
+
+    def __init__(self, rule: str, df: pd.DataFrame):
+        self.rule = rule
+        self.open = df["open"].to_numpy(dtype=float)
+        self.high = df["high"].to_numpy(dtype=float)
+        self.low = df["low"].to_numpy(dtype=float)
+        self.close = df["close"].to_numpy(dtype=float)
+        self.neck_col = df["db_neck"].to_numpy(dtype=float)
+        self.l1_col = df["db_l1"].to_numpy(dtype=float)
+        self.atr = df[f"atr_{ATR_PERIOD}"].to_numpy(dtype=float)
+        self.ma_break = df["ma10_break"].to_numpy(dtype=bool)
+
+    def start(self, i: int):
+        self.neck = self.neck_col[i]
+        self.height = self.neck - self.l1_col[i]
+        self.entry_px = self.open[i + 1] if i + 1 < len(self.open) else np.nan
+        self.peak_px = -np.inf
+        self.broke, self.bo_low, self.armed = False, np.nan, False
+
+    def hit(self, j: int, new_high: bool, high_val: float, prev_high: float) -> bool:
+        c, rule = self.close[j], self.rule
+        self.peak_px = max(self.peak_px, self.high[j])
+        if rule == "target":                                   # 優化 #12
+            return c >= self.neck + self.height
+        if rule == "target65":                                 # 優化 #13
+            return c >= self.neck + TARGET_DISCOUNT * self.height
+        if rule == "neck":                                     # 優化 #14
+            return c >= self.neck
+        if rule == "neckfail":                                 # 優化 #15
+            fired = self.broke and c < self.neck
+            self.broke = self.broke or c > self.neck
+            return fired
+        if rule == "bolow":                                    # 優化 #16
+            fired = (not np.isnan(self.bo_low)) and c < self.bo_low
+            if np.isnan(self.bo_low) and c > self.neck:
+                self.bo_low = self.low[j]
+            return fired
+        if rule == "breakeven":                                # 優化 #17
+            fired = self.armed and c < self.entry_px
+            self.armed = self.armed or c >= self.entry_px + self.height
+            return fired
+        if rule == "atr":                                      # 優化 #18
+            return (not np.isnan(self.atr[j])) and c < self.peak_px - CHANDELIER_K * self.atr[j]
+        if rule == "trail20":                                  # 優化 #19
+            return c < self.peak_px * (1.0 - TRAIL_DROP)
+        if rule == "ma10":                                     # 優化 #20
+            return bool(self.ma_break[j])
+        if rule == "mtop":                                     # 優化 #21
+            return new_high and (not np.isnan(prev_high)) and high_val < prev_high
+        raise ValueError(f"未知的出場優化 {rule}")
+
+
 class SingleDoubleBottomStrategy(VbtSingleStrategy):
     """雙底（底底高）進場、CHoCH 或跌破波段低點出場。訊號由逐根掃描產生，成交交給 vbt。"""
 
     STOP_LOW = True      # baseline：② 跌破波段低點出場（兼停損）
     # STOP_LOW = False   # 優化 #1：不設停損，出場只留 ① CHoCH
+
+    EXIT_RULE = None             # baseline：只有 ①②
+    # EXIT_RULE = "target"       # 優化 #12 測幅滿足點
+    # EXIT_RULE = "target65"     # 優化 #13 打折測幅 0.65
+    # EXIT_RULE = "neck"         # 優化 #14 頸線停利
+    # EXIT_RULE = "neckfail"     # 優化 #15 突破後跌回頸線
+    # EXIT_RULE = "bolow"        # 優化 #16 跌破突破 K 棒低點
+    # EXIT_RULE = "breakeven"    # 優化 #17 保本停損（賺到一個型態高度後）
+    # EXIT_RULE = "atr"          # 優化 #18 ATR 移動停損 3×ATR(14)
+    # EXIT_RULE = "trail20"      # 優化 #19 自最高價回落 20%
+    # EXIT_RULE = "ma10"         # 優化 #20 跌破 MA10
+    # EXIT_RULE = "mtop"         # 優化 #21 高檔 M 頭
 
     def __init__(self, pct: float = 0.02, liquidity: bool = False, **kwargs):
         super().__init__(**kwargs)
@@ -176,6 +268,7 @@ class SingleDoubleBottomStrategy(VbtSingleStrategy):
         self._trade_end = None
         self.diag = {"entries": 0, "exit_choch": 0, "exit_low": 0, "exit_both": 0, "open_at_end": 0,
                      "open_days_sum": 0, "open_days_max": 0,
+                     "exits": 0, "exit_new": 0, "exit_new_only": 0,   # 出場優化 #12～#21 的生效率用
                      "signals": 0}   # signals＝區間內的進場判定日數（含持倉中被忽略的），算生效率用   # 期末未平倉部位：進場到區間終點的日曆天
 
     def add_columns(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -199,6 +292,10 @@ class SingleDoubleBottomStrategy(VbtSingleStrategy):
         df["bull_align"] = ((close.rolling(20).mean() > close.rolling(60).mean())
                             & (close.rolling(60).mean() > close.rolling(120).mean()))
         df["vol_ma20"] = df["volume"].rolling(VOL_WINDOW).mean()
+        # 出場優化用欄位：#18 ATR、#20 收盤由上跌破 MA10
+        calculate_atr(df, window=ATR_PERIOD)
+        ma10 = close.rolling(MA_SHORT).mean()
+        df["ma10_break"] = ((close < ma10) & (close.shift(1) >= ma10.shift(1))).fillna(False)
         return df
 
     def base_signal(self, df: pd.DataFrame) -> pd.Series:
@@ -242,14 +339,17 @@ class SingleDoubleBottomStrategy(VbtSingleStrategy):
         n = len(df)
         entries = np.zeros(n, dtype=bool)
         exits = np.zeros(n, dtype=bool)
-        reason = np.zeros(n, dtype=np.int8)                 # 1=① CHoCH 2=② 跌破低點 3=同日都成立
+        reason = np.zeros(n, dtype=np.int8)                 # 位元：1=① CHoCH 2=② 跌破低點 4=出場優化 #12～#21
+        extra = ExtraExit(self.EXIT_RULE, df) if self.EXIT_RULE else None
 
         last_low = np.nan       # 最近一個已確認擺動低點（含當日確認）
+        last_high = np.nan      # 最近一個已確認擺動高點（#21 用；不分持倉與否都要追）
         # last_high = np.nan    # 附錄：雙頂 — 上一個已確認擺動高點
         in_pos = False
         peak = -np.inf          # ① 用：進場以來最高擺動高點
         for i in range(n):
             new_high = not np.isnan(th[i])
+            prev_high, last_high = last_high, (th[i] if new_high else last_high)
             # prev_high = last_high; last_high = th[i] if new_high else last_high   # 附錄：雙頂
             if not np.isnan(tl[i]):
                 last_low = tl[i]
@@ -258,16 +358,19 @@ class SingleDoubleBottomStrategy(VbtSingleStrategy):
                     in_pos = True
                     entries[i] = True
                     peak = -np.inf
+                    if extra:
+                        extra.start(i)
                 continue
             # ── 持倉中：判定出場 ──
             hit_choch = new_high and th[i] < peak                                  # ① lower-high
             hit_low = self.STOP_LOW and (not np.isnan(last_low)) and close[i] < last_low   # ② 跌破波段低點
             # hit_choch = hit_choch or (new_high and not np.isnan(prev_high) and th[i] < prev_high)  # 附錄：雙頂
+            hit_new = bool(extra and extra.hit(i, new_high, th[i], prev_high))     # 出場優化（附加）
             if new_high:
                 peak = max(peak, th[i])
-            if hit_choch or hit_low:
+            if hit_choch or hit_low or hit_new:
                 exits[i] = True
-                reason[i] = (1 if hit_choch else 0) + (2 if hit_low else 0)
+                reason[i] = (1 if hit_choch else 0) + (2 if hit_low else 0) + (4 if hit_new else 0)
                 in_pos = False
 
         self._count_diag(df.index, entries, exits, reason, entry_raw)
@@ -289,6 +392,9 @@ class SingleDoubleBottomStrategy(VbtSingleStrategy):
         self.diag["exit_choch"] += int((ex_in & (reason == 1)).sum())
         self.diag["exit_low"] += int((ex_in & (reason == 2)).sum())
         self.diag["exit_both"] += int((ex_in & (reason == 3)).sum())
+        self.diag["exits"] += int(ex_in.sum())
+        self.diag["exit_new"] += int((ex_in & ((reason & 4) > 0)).sum())
+        self.diag["exit_new_only"] += int((ex_in & (reason == 4)).sum())
         # 期末未平倉：區間內最後一筆進場之後，區間內沒有出場
         ent_pos = np.flatnonzero(entries & inside)
         if len(ent_pos):
