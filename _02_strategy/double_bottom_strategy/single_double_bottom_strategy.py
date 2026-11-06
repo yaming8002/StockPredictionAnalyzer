@@ -60,6 +60,9 @@
     與 ① 的差別：① 只跟進場以後的高點比。寫法同下方附錄的雙頂，但這裡是附加、不取代 ①。
   #12～#16 需要頸線：沒有頸線的進場（兩個底之間沒有確認過的高點）這幾條不觸發。
   診斷多記 exit_new（出場那根新規則成立，含與 ①② 同根）、exit_new_only（只有新規則成立＝搶在 ①② 之前）。
+  附錄：替換（2026-11-03 加入）：類別屬性 REPLACE 換成下一行註解的 True，出場只剩 EXIT_RULE 那一條、①② 都不用。
+    只當附錄對照，不是優化編號；沒有停損類的規則部位會長期不出場，看診斷的期末未平倉率
+    （掃描：exit_filter_sweep.py --replace，結果寫 single_double_bottom_exit_replace/）。
 
 附錄（舊版，2026-10-16 第一輪，結果在 result/single_double_bottom_v1_dtop/）：出場是「CHoCH 二選一
   （① 或 ②）＋雙頂（頂頂低）」——持倉中新確認高點 H2 < 上一個已確認高點 H1 就出場（H1 可能在進場前）。
@@ -261,6 +264,9 @@ class SingleDoubleBottomStrategy(VbtSingleStrategy):
     # EXIT_RULE = "ma10"         # 優化 #20 跌破 MA10
     # EXIT_RULE = "mtop"         # 優化 #21 高檔 M 頭
 
+    REPLACE = False      # baseline：EXIT_RULE 附加在 ①② 上，先觸發者算
+    # REPLACE = True     # 附錄：替換，出場只剩 EXIT_RULE 那一條（EXIT_RULE 為 None 時不作用）
+
     def __init__(self, pct: float = 0.02, liquidity: bool = False, **kwargs):
         super().__init__(**kwargs)
         self.pct = pct
@@ -366,6 +372,8 @@ class SingleDoubleBottomStrategy(VbtSingleStrategy):
             hit_low = self.STOP_LOW and (not np.isnan(last_low)) and close[i] < last_low   # ② 跌破波段低點
             # hit_choch = hit_choch or (new_high and not np.isnan(prev_high) and th[i] < prev_high)  # 附錄：雙頂
             hit_new = bool(extra and extra.hit(i, new_high, th[i], prev_high))     # 出場優化（附加）
+            if self.REPLACE and extra:                                             # 附錄：替換，①② 不用
+                hit_choch = hit_low = False
             if new_high:
                 peak = max(peak, th[i])
             if hit_choch or hit_low or hit_new:

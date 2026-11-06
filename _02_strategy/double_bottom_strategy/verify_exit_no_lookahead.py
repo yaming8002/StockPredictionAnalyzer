@@ -5,7 +5,8 @@
 （build_signals，進出場都是路徑相依），兩邊在截斷日以前的進場與出場成交日必須逐日相同；
 任何一天不同＝用到了截斷日之後的資訊。進場一律基本版＋可成交門檻。
 
-執行：python _02_strategy/double_bottom_strategy/verify_exit_no_lookahead.py [--limit 200] [--exits base target ...]
+執行：python _02_strategy/double_bottom_strategy/verify_exit_no_lookahead.py [--limit 200] [--exits base target ...] [--replace]
+（--replace＝附錄：替換，出場只用新規則）
 """
 import argparse
 import os
@@ -33,6 +34,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=200)
     ap.add_argument("--exits", nargs="+", default=list(EXIT_RULES), choices=list(EXIT_RULES))
+    ap.add_argument("--replace", action="store_true")
     a = ap.parse_args()
     t0 = time.time()
     bad, checks, exit_days, n_stock = 0, 0, 0, 0
@@ -43,7 +45,7 @@ def main() -> int:
         common.ensure_columns(raw)
         for pct in PCTS:
             for rule in a.exits:
-                v = make_exit_variant(rule, pct, liquidity=True)
+                v = make_exit_variant(rule, pct, liquidity=True, replace=a.replace)
                 full_e, full_x = _signals(v, raw)
                 for cut in CUTOFFS:
                     part = raw.loc[:cut]

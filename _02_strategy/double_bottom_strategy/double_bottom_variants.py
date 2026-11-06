@@ -76,10 +76,11 @@ EXIT_RULES = {
 }
 
 
-def make_exit_variant(rule: str, pct: float, liquidity: bool) -> SingleDoubleBottomStrategy:
-    """進場基本版（＋可成交門檻），出場＝①② ＋ rule 那一條（base＝不附加）。"""
+def make_exit_variant(rule: str, pct: float, liquidity: bool, replace: bool = False) -> SingleDoubleBottomStrategy:
+    """進場基本版（＋可成交門檻），出場＝①② ＋ rule 那一條（base＝不附加）；replace＝True 時只用 rule（附錄：替換）。"""
     if rule not in EXIT_RULES:
         raise ValueError(f"未知的出場變體 {rule}，可用：{list(EXIT_RULES)}")
     v = SingleDoubleBottomStrategy(pct=pct, liquidity=liquidity)
     v.EXIT_RULE = None if rule == "base" else rule
+    v.REPLACE = replace
     return v

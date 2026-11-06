@@ -36,14 +36,15 @@ STATS_FILE = os.path.join(SRC, "_article4_stats.csv")
 EXITS = ("base", "target", "target65", "neck", "neckfail", "bolow")
 
 
-def stats(exits=EXITS) -> pd.DataFrame:
-    """exits 讓〈雙底（五）〉的 build_article5_tables 共用同一套算法（必含 base，底色要對它比）。"""
+def stats(exits=EXITS, src: str = SRC) -> pd.DataFrame:
+    """exits 讓〈雙底（五）〉的 build_article5_tables 共用同一套算法（必含 base，底色要對它比）；
+    src 讓〈雙底（六）〉改讀替換版的 single_double_bottom_exit_replace/。"""
     rows = []
     for liq in (False, True):
         for p in PCTS:
             for e in exits:
                 tag = f"p{p}_{'liq1000' if liq else 'raw'}__{e}"
-                folder = os.path.join(SRC, tag)
+                folder = os.path.join(src, tag)
                 tr = pd.read_csv(os.path.join(folder, f"single_double_bottom_{tag}_trades.csv"))
                 ex = exact_stats(tr)
                 with open(os.path.join(folder, "diag.json"), encoding="utf-8") as f:
