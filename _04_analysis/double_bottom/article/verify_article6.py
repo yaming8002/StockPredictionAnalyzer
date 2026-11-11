@@ -36,12 +36,12 @@ SLUG = "double-bottom-exit-replace"
 
 
 def claims(df) -> dict:
-    """key → (判斷式是否成立, 文章裡的字串)。"""
+    """key → (判斷式是否成立, 文章裡的字串)。只用可成交 3 格（用戶 2026-11-11 拿掉裸版）。"""
     col = lambda e, c: df[df["變體"] == e][c]
     down = lambda e, c: all(a < b for a, b in six(df, e, c))
     up = lambda e, c: all(a > b for a, b in six(df, e, c))
     n_up = lambda e, c: sum(a > b for a, b in six(df, e, c))
-    pf2 = lambda e: f"{arrow(df, e, 3, False, '獲利因子')}；{arrow(df, e, 9, False, '獲利因子')}"
+    pf2 = lambda e: f"{arrow(df, e, 3, True, '獲利因子')}；{arrow(df, e, 9, True, '獲利因子')}"
     rng = lambda xs, nd, unit="%": f"{fmt_nd(min(xs), nd)}{unit}～{fmt_nd(max(xs), nd)}{unit}"
     days = lambda e: f"{half_up(col(e, '平均持有天').min(), 0)}～{half_up(col(e, '平均持有天').max(), 0)} 天"
     kept, dropped = split_exits(df)
@@ -80,9 +80,8 @@ def claims(df) -> dict:
         "atr_hold": (col("atr", "平均持有天").max() - col("atr", "平均持有天").min() < 2, days("atr")),
         "atr_pf": (down("atr", "獲利因子"), pf2("atr")),
         # 回落 20%
-        "trail_up": (n_up("trail20", "獲利因子") == 4
-                     and [a > b for a, b in six(df, "trail20", "獲利因子")] == [True, True, False, True, True, False],
-                     "4 格比基本版高、2 格比基本版低"),
+        "trail_up": ([a > b for a, b in six(df, "trail20", "獲利因子")] == [True, True, False],
+                     "3%、6% 比基本版高、9% 比基本版低"),
         "trail_pf": (True, pf2("trail20")),
         "trail_loss": (down("trail20", "虧損平均%"),                  # 六格都比基本版賠得深
                        rng(col("trail20", "虧損平均%"), 1)),
@@ -92,7 +91,7 @@ def claims(df) -> dict:
         "ma10_pf": (max(col("ma10", "獲利因子")) < 1, rng(col("ma10", "獲利因子"), 3, "")),
         # 高檔 M 頭
         "mtop_pf": (up("mtop", "獲利因子") and up("mtop", "中位數%"), pf2("mtop")),
-        "mtop_hold": (up("mtop", "平均持有天"), arrow(df, "mtop", 9, False, "平均持有天", " 天")),
+        "mtop_hold": (up("mtop", "平均持有天"), arrow(df, "mtop", 9, True, "平均持有天", " 天")),
         "mtop_open": (True, rng(col("mtop", "未平倉率%"), 1)),
         # 警告的兩條（逐條判定，不是門檻挑出來的）與回檔表的數字
         "warn": (warn == ("neck", "trail20") and set(warn) <= set(kept) and same_n,
@@ -107,7 +106,7 @@ def claims(df) -> dict:
         # 分組本身
         "split": (kept == ("neck", "atr", "trail20", "ma10", "mtop")
                   and dropped == ("target", "target65", "neckfail", "bolow", "breakeven"),
-                  "下面這五條在六格裡至少有一格超過 10%"),
+                  "下面這五條在三格裡至少有一格超過 10%"),
     }
 
 

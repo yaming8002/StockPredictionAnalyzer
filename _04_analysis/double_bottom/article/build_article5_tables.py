@@ -21,7 +21,7 @@ for p in (_root, _here):
 
 import pandas as pd  # noqa: E402
 
-from build_article2_tables import PCTS, fmt, half_up, table  # noqa: E402
+from build_article2_tables import CELL_HEAD, LIQS, N_CELLS, PCTS, fmt, half_up, span, table  # noqa: E402
 from build_article4_tables import EXITS as EXITS4, LABELS, SRC, stats  # noqa: E402
 
 EXITS = ("base", "breakeven", "atr", "trail20", "ma10", "mtop")
@@ -30,23 +30,21 @@ STATS_FILE = os.path.join(SRC, "_article5_stats.csv")
 
 
 def summary_table(df: pd.DataFrame, exits=ALL_EXITS) -> str:
-    """總表：各出場 6 格的獲利因子＋比基本版高的格數＋生效率、搶先率範圍（不上色）。"""
-    head = ("<thead><tr><th>出場</th><th>3%</th><th>6%</th><th>9%</th><th>3%<br>可成交</th>"
-            "<th>6%<br>可成交</th><th>9%<br>可成交</th><th>比基本版高</th><th>生效率%</th><th>搶先率%</th>"
-            "</tr></thead>")
+    """總表：各出場可成交 3 格的獲利因子＋比基本版高的格數＋生效率、搶先率範圍（不上色）。"""
+    head = f"<thead><tr><th>出場</th>{CELL_HEAD}<th>比基本版高</th><th>生效率%</th><th>搶先率%</th></tr></thead>"
     out = ['<div class="table-wrap"><table class="bt-table">', head, "<tbody>"]
     for e in exits:
         pfs, ups = [], 0
-        for liq in (False, True):
+        for liq in LIQS:
             for p in PCTS:
                 v = df[(df["門檻%"] == p) & (df["可成交"] == liq) & (df["變體"] == e)].iloc[0]["獲利因子"]
                 b = df[(df["門檻%"] == p) & (df["可成交"] == liq) & (df["變體"] == "base")].iloc[0]["獲利因子"]
                 pfs.append(fmt("獲利因子", v))
                 ups += v > b
         sub = df[df["變體"] == e]
-        rng = lambda c: f"{half_up(sub[c].min(), 0)}～{half_up(sub[c].max(), 0)}"
+        rng = lambda c: span(sub[c].min(), sub[c].max(), 0)
         tail = ("<td>—</td><td>—</td><td>—</td>" if e == "base"
-                else f"<td>{ups}／6</td><td>{rng('生效率%')}</td><td>{rng('搶先率%')}</td>")
+                else f"<td>{ups}／{N_CELLS}</td><td>{rng('生效率%')}</td><td>{rng('搶先率%')}</td>")
         name = f"<b>{LABELS[e]}</b>" if e == "base" else LABELS[e]
         out.append(f"<tr><td>{name}</td>{''.join(f'<td>{x}</td>' for x in pfs)}{tail}</tr>")
     out.append("</tbody></table></div>")

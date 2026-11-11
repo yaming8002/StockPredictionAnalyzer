@@ -29,7 +29,7 @@ import pandas as pd  # noqa: E402
 
 from _02_strategy.double_bottom_strategy.single_double_bottom_strategy import RESULT_DIR  # noqa: E402
 from _03_multi_strategy.base.fast_multi import EXACT, exact_stats  # noqa: E402
-from build_article2_tables import COLS, PCTS, table  # noqa: E402
+from build_article2_tables import COLS, LIQS, PCTS, table  # noqa: E402
 
 SRC = os.path.join(RESULT_DIR, "single_double_bottom_exit")
 STATS_FILE = os.path.join(SRC, "_article4_stats.csv")
@@ -40,7 +40,7 @@ def stats(exits=EXITS, src: str = SRC) -> pd.DataFrame:
     """exits 讓〈雙底（五）〉的 build_article5_tables 共用同一套算法（必含 base，底色要對它比）；
     src 讓〈雙底（六）〉改讀替換版的 single_double_bottom_exit_replace/。"""
     rows = []
-    for liq in (False, True):
+    for liq in LIQS:
         for p in PCTS:
             for e in exits:
                 tag = f"p{p}_{'liq1000' if liq else 'raw'}__{e}"

@@ -31,67 +31,42 @@ SLUG = "double-bottom-entry-filters-2"
 
 
 def claims(df) -> list:
-    pf = lambda e, p, liq: fmt("獲利因子", cell(df, e, p, liq, "獲利因子"))
-    one = lambda e, p, liq, c: fmt(c, cell(df, e, p, liq, c))
-    eff = lambda e: df[df["變體"] == e]["生效率%"]
+    """只用可成交 3 格（用戶 2026-11-11 拿掉裸版）。"""
+    pf = lambda e, p: fmt("獲利因子", cell(df, e, p, True, "獲利因子"))
+    eff = lambda e: df[(df["變體"] == e) & df["可成交"]]["生效率%"]
     ups = lambda e, c="獲利因子": [a > b for a, b in six(df, e, c)]
-    effp = lambda e, p: [cell(df, e, p, liq, "生效率%") for liq in (False, True)]
     pfd = lambda e: [a - b for a, b in six(df, e, "獲利因子")]
     ratio = lambda e: [a / b for a, b in six(df, e, "交易次數")]
-    rng = lambda xs: f"{half_up(min(xs) * 100, 0)}%～{half_up(max(xs) * 100, 0)}%"
+    rng = lambda xs, nd: f"{half_up(min(xs), nd)}～{half_up(max(xs), nd)}"
+    pct = lambda xs: f"{half_up(min(xs) * 100, 0)}%～{half_up(max(xs) * 100, 0)}%"
+    win = lambda e, p: half_up(cell(df, e, p, True, "勝率%"), 1)
+    vs_d3 = half_up(pfd("volshrink")[0], 4)
     return [
-        # 站上年線
-        ("年線 六格皆降、裸版降得多",
-         not any(ups("ma200")) and all(
-             (b1 - a1) > (b2 - a2) for (a1, b1), (a2, b2)
-             in zip(six(df, "ma200", "獲利因子")[:3], six(df, "ma200", "獲利因子")[3:])),
-         f"裸版降得比較多（3%：{pf('base', 3, False)} → {pf('ma200', 3, False)}），"
-         f"可成交版降得比較少（9%：{pf('base', 9, True)} → {pf('ma200', 9, True)}）"),
+        ("年線 三格皆降、3% 降最多", not any(ups("ma200")) and min(pfd("ma200")) == pfd("ma200")[0],
+         f"三格的獲利因子都比基本版低（3%：{pf('base', 3)} → {pf('ma200', 3)}；9%：{pf('base', 9)} → {pf('ma200', 9)}）"),
         ("年線 生效率", True, f"生效率在 {pct_range(eff('ma200'))}"),
-        # 長線多頭排列（MA20 > MA60 > MA120，2026-10-22 用戶改定）
-        ("長線排列 生效率", True, f"生效率在 {pct_range(eff('align'))}"),
-        ("長線排列 六格皆降", not any(ups("align")),
-         f"六格的獲利因子都比基本版低（3% 裸版 {pf('base', 3, False)} → {pf('align', 3, False)}；"
-         f"9% 裸版 {pf('base', 9, False)} → {pf('align', 9, False)}）"),
-        ("長線排列 可成交降得比較少", max(-x for x in pfd("align")[3:]) < min(-x for x in pfd("align")[:3]),
-         f"可成交版降得比較少（差 {half_up(-max(pfd('align')[3:]), 3)}～{half_up(-min(pfd('align')[3:]), 3)}）"),
-        ("長線排列 筆數比例與總獲利皆少", all(a < b for a, b in six(df, "align", "總獲利(萬)")),
-         f"筆數只剩約一半（{rng(ratio('align'))}）"),
-        # 放量
-        ("放量 生效率且 3% 最多", min(effp("volume", 3)) > max(effp("volume", 6) + effp("volume", 9)),
+        ("長線排列 生效率", True, f"生效率在 {pct_range(eff('align'))}，約一半"),
+        ("長線排列 三格皆降", not any(ups("align")),
+         f"三格的獲利因子都比基本版低，差 {rng([-x for x in pfd('align')], 3)}（9%：{pf('base', 9)} → {pf('align', 9)}）"),
+        ("長線排列 筆數與總獲利皆少", all(a < b for a, b in six(df, "align", "總獲利(萬)")),
+         f"筆數只剩約一半（{pct(ratio('align'))}），總獲利每一格都比基本版少很多"),
+        ("放量 生效率 3% 最多", eff("volume").idxmax() == df[(df["變體"] == "volume") & df["可成交"] & (df["門檻%"] == 3)].index[0],
          f"生效率在 {pct_range(eff('volume'))}，3% 擋得最多"),
-        ("放量 只有 6% 兩格升（總表：2 格高、門檻間方向相反）", ups("volume") == [False, True, False, False, True, False],
-         f"3% 可成交那格降得最多（{pf('base', 3, True)} → {pf('volume', 3, True)}）"),
-        ("放量 3% 可成交是降幅最大的一格", min(range(6), key=lambda i: pfd("volume")[i]) == 3, "降得最多"),
-        ("放量 勝率六格皆升", all(ups("volume", "勝率%")),
-         f"勝率六格都略升（例：3% 裸版 {one('base', 3, False, '勝率%')}% → {one('volume', 3, False, '勝率%')}%）"),
-        # 第二底量縮
-        ("量縮 生效率", True, f"生效率在 {pct_range(eff('volshrink'))}"),
-        ("量縮 6/9% 四格升", [ups("volshrink")[i] for i in (1, 2, 4, 5)] == [True] * 4,
-         f"6%、9% 四格的獲利因子都比基本版高（9% 裸版 {pf('base', 9, False)} → {pf('volshrink', 9, False)}）"),
-        ("量縮 3% 兩格顯示相同、裸低可成交高",
-         pf("volshrink", 3, False) == pf("base", 3, False) and pf("volshrink", 3, True) == pf("base", 3, True)
-         and pfd("volshrink")[0] < 0 < pfd("volshrink")[3],
-         f"（裸版低 {half_up(-pfd('volshrink')[0], 4)}、可成交高 {half_up(pfd('volshrink')[3], 4)}）"),
-        ("量縮 筆數比例與總獲利皆少", all(a < b for a, b in six(df, "volshrink", "總獲利(萬)")),
-         f"筆數只剩約六成（{rng(ratio('volshrink'))}）"),
-        # 確認日 K 棒
-        ("K 棒 生效率約 5%", 4.5 <= min(eff("bullbar")) and max(eff("bullbar")) < 6,
-         f"只擋掉約 5% 的訊號（各格 {pct_range(eff('bullbar'))}）"),
-        ("K 棒 九成五通過", 0.94 <= 1 - max(eff("bullbar")) / 100 and 1 - min(eff("bullbar")) / 100 <= 0.96,
-         "本來就有九成五左右是紅 K 或長下影線"),
-        ("K 棒 六格皆降、差距範圍", not any(ups("bullbar")),
-         f"六格的獲利因子都比基本版略低（差 {half_up(-max(pfd('bullbar')), 3)}～{half_up(-min(pfd('bullbar')), 3)}）"),
-        ("K 棒 勝率六格皆降", not any(ups("bullbar", "勝率%")), "勝率也六格都略降"),
-        # 總結
-        ("總表：量縮 5 升", sum(ups("volshrink")) == 5,
-         f"**第二底量縮** 5 格高、1 格低：6%、9% 四格比較高，3% 兩格幾乎一樣（低的那格只差 "
-         f"{half_up(-pfd('volshrink')[0], 4)}）"),
-        ("總表：放量 2 升", sum(ups("volume")) == 2, "**放量** 2 格高、4 格低，高的是 6% 那兩格"),
-        ("總表：年線／長線排列／K 棒 0 升", sum(ups("ma200")) == sum(ups("align")) == sum(ups("bullbar")) == 0,
-         "**站上年線、長線多頭排列、確認日 K 棒**六格都比基本版低"),
-        ("總表：三條擋掉一半上下", all(40 <= x <= 65 for e in ("align", "volume", "volshrink") for x in eff(e)),
-         "都擋掉一半上下的訊號"),
+        ("放量 只有 6% 升、3% 降最多", ups("volume") == [False, True, False] and min(pfd("volume")) == pfd("volume")[0],
+         f"獲利因子只有 6% 比基本版高，3%、9% 兩格都比較低；3% 降得最多（{pf('base', 3)} → {pf('volume', 3)}）"),
+        ("放量 勝率三格皆升", all(ups("volume", "勝率%")), f"勝率三格都略升（例：3%：{win('base', 3)}% → {win('volume', 3)}%）"),
+        ("量縮 生效率", True, f"生效率約 {pct_range(eff('volshrink'))}"),
+        ("量縮 6/9 升、3% 顯示相同", ups("volshrink")[1:] == [True, True] and pf("volshrink", 3) == pf("base", 3) and vs_d3 > 0,
+         f"6%、9% 兩格的獲利因子比基本版高（9%：{pf('base', 9)} → {pf('volshrink', 9)}）；3% 跟基本版幾乎一樣，表上顯示相同（只高 {vs_d3}）"),
+        ("量縮 筆數與總獲利皆少", all(a < b for a, b in six(df, "volshrink", "總獲利(萬)")),
+         f"因為筆數只剩約五成多（{pct(ratio('volshrink'))}），總獲利每一格都比基本版少"),
+        ("紅K 生效率", True, f"這條只擋掉約 {pct_range(eff('bullbar'))} 的訊號"),
+        ("紅K 三格略降", not any(ups("bullbar")) and not any(ups("bullbar", "勝率%")),
+         f"三格的獲利因子都比基本版略低（差 {rng([-x for x in pfd('bullbar')], 3)}），勝率也三格都略降"),
+        ("總表 量縮 3 升", sum(ups("volshrink")) == 3, f"**第二底量縮**三格都比基本版高：6%、9% 比較明顯，3% 只高 {vs_d3}"),
+        ("總表 放量 1 升", sum(ups("volume")) == 1, "**放量** 1 格高、2 格低，高的是 6%"),
+        ("總表 三條全降", sum(ups("ma200")) == sum(ups("align")) == sum(ups("bullbar")) == 0,
+         "**站上年線、長線多頭排列、確認日 K 棒**三格都比基本版低"),
     ]
 
 

@@ -33,6 +33,9 @@ from _03_multi_strategy.base.fast_multi import EXACT, exact_stats  # noqa: E402
 SRC = os.path.join(RESULT_DIR, "single_double_bottom_entry")
 STATS_FILE = os.path.join(SRC, "_article2_stats.csv")
 PCTS = (3, 6, 9)
+LIQS = (True,)                        # 只用可成交格（用戶 2026-11-11：「原版的都要去掉」「必須都包含成交金額 > 1,000 萬」）
+N_CELLS = len(PCTS) * len(LIQS)
+CELL_HEAD = "".join(f"<th>{p}%<br>可成交</th>" for p in PCTS)
 ENTRIES = ("base", "neck", "gap", "rise", "drop", "height")   # 文章只收型態條件（2026-10-21 用戶定）
 COLS = ["交易次數", "勝率%", "平均持有天", "獲利平均%", "虧損平均%", "中位數%", "期望值/筆", "獲利因子", "總獲利(萬)"]
 PAINT = ("勝率%", "獲利平均%", "中位數%", "期望值/筆", "獲利因子")
@@ -62,7 +65,7 @@ def fmt(col: str, v) -> str:
 def stats(entries=ENTRIES) -> pd.DataFrame:
     """entries 讓〈雙底（三）〉的 build_article3_tables 共用同一套算法（必含 base，生效率要對它算）。"""
     rows = []
-    for liq in (False, True):
+    for liq in LIQS:
         for p in PCTS:
             for e in entries:
                 tag = f"p{p}_{'liq1000' if liq else 'raw'}__{e}"
@@ -82,6 +85,12 @@ def stats(entries=ENTRIES) -> pd.DataFrame:
     return df
 
 
+def span(lo, hi, nd: int) -> str:
+    """區間字串；兩端取到 nd 位相同時只寫一個數（只剩可成交 3 格後常出現 59～59）。"""
+    a, b = half_up(lo, nd), half_up(hi, nd)
+    return f"{a}" if a == b else f"{a}～{b}"
+
+
 def row_label(p: int, liq: bool) -> str:
     return f"ZigZag {p}%" + ("<br>＋ 成交金額 &gt; 1,000 萬" if liq else "")
 
@@ -94,9 +103,9 @@ def cell_class(col: str, v, b) -> str:
 
 
 def table(df: pd.DataFrame, entry: str) -> str:
-    """一張表 6 列（裸版 3/6/9、可成交 3/6/9）；entry＝base 時不上色、也不附 bt-note。"""
+    """一張表 3 列（可成交 3/6/9）；entry＝base 時不上色、也不附 bt-note。"""
     out = ['<div class="table-wrap"><table class="bt-table">', HEAD, "<tbody>"]
-    for liq in (False, True):
+    for liq in LIQS:
         for p in PCTS:
             r = df[(df["門檻%"] == p) & (df["可成交"] == liq) & (df["變體"] == entry)].iloc[0]
             b = df[(df["門檻%"] == p) & (df["可成交"] == liq) & (df["變體"] == "base")].iloc[0]
@@ -119,21 +128,20 @@ LABELS = {"base": "基本版", "neck": "頸線突破", "gap": "兩底間隔 ≥ 
 
 
 def summary_table(df: pd.DataFrame, entries=ENTRIES) -> str:
-    """總表：各條件 6 格的獲利因子＋比基本版高的格數＋生效率範圍（不上色）。"""
-    head = ("<thead><tr><th>進場條件</th><th>3%</th><th>6%</th><th>9%</th><th>3%<br>可成交</th>"
-            "<th>6%<br>可成交</th><th>9%<br>可成交</th><th>比基本版高</th><th>生效率%</th></tr></thead>")
+    """總表：各條件可成交 3 格的獲利因子＋比基本版高的格數＋生效率範圍（不上色）。"""
+    head = f"<thead><tr><th>進場條件</th>{CELL_HEAD}<th>比基本版高</th><th>生效率%</th></tr></thead>"
     out = ['<div class="table-wrap"><table class="bt-table">', head, "<tbody>"]
     for e in entries:
         pfs, ups = [], 0
-        for liq in (False, True):
+        for liq in LIQS:
             for p in PCTS:
                 v = df[(df["門檻%"] == p) & (df["可成交"] == liq) & (df["變體"] == e)].iloc[0]["獲利因子"]
                 b = df[(df["門檻%"] == p) & (df["可成交"] == liq) & (df["變體"] == "base")].iloc[0]["獲利因子"]
                 pfs.append(fmt("獲利因子", v))
                 ups += v > b
-        eff = df[df["變體"] == e]["生效率%"]
+        eff = df[(df["變體"] == e) & df["可成交"].isin(LIQS)]["生效率%"]
         tail = ("<td>—</td><td>—</td>" if e == "base"
-                else f"<td>{ups}／6</td><td>{half_up(eff.min(), 0)}～{half_up(eff.max(), 0)}</td>")
+                else f"<td>{ups}／{N_CELLS}</td><td>{span(eff.min(), eff.max(), 0)}</td>")
         name = f"<b>{LABELS[e]}</b>" if e == "base" else LABELS[e]
         out.append(f"<tr><td>{name}</td>{''.join(f'<td>{x}</td>' for x in pfs)}{tail}</tr>")
     out.append("</tbody></table></div>")

@@ -32,7 +32,7 @@ import pandas as pd  # noqa: E402
 
 from _02_strategy.base.vbt import common  # noqa: E402
 from _02_strategy.double_bottom_strategy.exit_filter_sweep import SUB_REPLACE  # noqa: E402
-from build_article2_tables import PCTS, fmt, half_up, row_label, table  # noqa: E402
+from build_article2_tables import CELL_HEAD, LIQS, N_CELLS, PCTS, fmt, half_up, row_label, table  # noqa: E402
 from build_article4_tables import LABELS, RESULT_DIR, stats  # noqa: E402
 
 SRC = os.path.join(RESULT_DIR, SUB_REPLACE)
@@ -60,15 +60,14 @@ def _cell(df, e, p, liq, col):
 
 
 def _six_head(first: str, tail: str) -> str:
-    return (f"<thead><tr><th>{first}</th><th>3%</th><th>6%</th><th>9%</th><th>3%<br>可成交</th>"
-            f"<th>6%<br>可成交</th><th>9%<br>可成交</th>{tail}</tr></thead>")
+    return f"<thead><tr><th>{first}</th>{CELL_HEAD}{tail}</tr></thead>"
 
 
 def open_rate_table(df: pd.DataFrame, exits) -> str:
     """移除組：各出場 6 格的期末未賣出比例（%，不上色）；基本版放第一列當對照。"""
     out = ['<div class="table-wrap"><table class="bt-table">', _six_head("出場", ""), "<tbody>"]
     for e in ("base",) + tuple(exits):
-        vals = [f"{half_up(_cell(df, e, p, liq, '未平倉率%'), 1)}" for liq in (False, True) for p in PCTS]
+        vals = [f"{half_up(_cell(df, e, p, liq, '未平倉率%'), 1)}" for liq in LIQS for p in PCTS]
         name = f"<b>{LABELS[e]}</b>" if e == "base" else LABELS[e]
         out.append(f"<tr><td>{name}</td>{''.join(f'<td>{x}</td>' for x in vals)}</tr>")
     out.append("</tbody></table></div>")
@@ -139,7 +138,7 @@ def worst_close_pct(tr: pd.DataFrame) -> np.ndarray:
 def drawdown(e: str) -> pd.DataFrame:
     """六格：持有超過一年的比例、持有期間曾跌 ≥10%／≥20% 的比例、賺錢交易中曾跌 ≥10% 的比例與其持有天中位數。"""
     rows = []
-    for liq in (False, True):
+    for liq in LIQS:
         for p in PCTS:
             tr = _closed_trades(e, p, liq)
             dd = worst_close_pct(tr)
@@ -174,14 +173,14 @@ def summary_table(df: pd.DataFrame, exits, warn=()) -> str:
            _six_head("出場", "<th>比基本版高</th><th>期末未賣出%</th>"), "<tbody>"]
     for e in ("base",) + tuple(exits):
         pfs, ups = [], 0
-        for liq in (False, True):
+        for liq in LIQS:
             for p in PCTS:
                 v, b = _cell(df, e, p, liq, "獲利因子"), _cell(df, "base", p, liq, "獲利因子")
                 pfs.append(fmt("獲利因子", v))
                 ups += v > b
         sub = df[df["變體"] == e]["未平倉率%"]
         rng = f"{half_up(sub.min(), 1)}～{half_up(sub.max(), 1)}"
-        tail = f"<td>—</td><td>{rng}</td>" if e == "base" else f"<td>{ups}／6</td><td>{rng}</td>"
+        tail = f"<td>—</td><td>{rng}</td>" if e == "base" else f"<td>{ups}／{N_CELLS}</td><td>{rng}</td>"
         name = f"<b>{LABELS[e]}</b>" if e == "base" else LABELS[e] + (WARN_MARK if e in warn else "")
         out.append(f"<tr><td>{name}</td>{''.join(f'<td>{x}</td>' for x in pfs)}{tail}</tr>")
     out.append("</tbody></table></div>")
