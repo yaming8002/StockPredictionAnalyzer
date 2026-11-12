@@ -13,7 +13,7 @@
   2. 排名前 10：各組 3 格獲利因子＋平均名次＋最差名次（不上色）。
   3. 前 5 名各自 3 格，標準 10 欄、跟同格基本版比上色（用戶 2026-11-11）。
   4. 附錄：3%／6%／9% 各一張，148 種組合全列（基本版第一列、其餘依獲利因子由高到低），標準 10 欄、不上色。
-  （drawdown_combo／drawdown_focus_table／mc_table／ranked_label 給〈雙底（八）〉用。）
+  （drawdown_cell／drawdown_combo／mc_table／combo_or_base 給〈雙底（八）〉用。）
 數字從逐筆 trades 用 fast_multi.exact_stats 重算精確值、一次 half-up（同 build_article2_tables）。
 
 執行：PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python _04_analysis/double_bottom/article/build_article7_tables.py
@@ -37,7 +37,6 @@ from _02_strategy.double_bottom_strategy.combo_sweep import SUB, _tag  # noqa: E
 from _02_strategy.double_bottom_strategy.single_double_bottom_strategy import RESULT_DIR  # noqa: E402
 from _03_multi_strategy.base.fast_multi import EXACT, exact_stats  # noqa: E402
 from _04_analysis.double_bottom.combo_ranking import load_summary, rank_combos  # noqa: E402
-from _04_analysis.double_bottom.double_bottom_montecarlo import DRAWDOWN_RANK, OUT_DRAWDOWN as MC_DRAWDOWN_FILE  # noqa: E402
 from _04_analysis.double_bottom.double_bottom_montecarlo import OUT as MC_FILE  # noqa: E402
 from build_article2_tables import COLS, HEAD, NOTE, PCTS, cell_class, fmt, half_up, row_label  # noqa: E402
 from build_article2_tables import LABELS as ENTRY_LABELS  # noqa: E402
@@ -48,7 +47,7 @@ SRC = os.path.join(RESULT_DIR, SUB)
 STATS_FILE = os.path.join(SRC, "_article7_stats.csv")
 TOP_TABLE = 10
 TOP_DETAIL = 5                        # 列完整 10 欄的名次數（用戶 2026-11-11：「前 5 名都列完整數字」）
-TOP_MC = 5                            # 〈雙底（八）〉蒙地卡羅取篩選後前五（含基本版；用戶 2026-11-11）
+TOP_MC = 5                            # 〈雙底（八）〉蒙地卡羅取逐格篩選後、筆數夠的前五（用戶 2026-11-11）
 FOCUS = (6, True)                     # 前六與附錄用的格子：6% 可成交（用戶 2026-11-07）
 BASE = ("base", "base")
 
@@ -146,33 +145,26 @@ def top_focus_table(df, rank) -> str:
     return _wrap(rows, True)
 
 
-def ranked_label(rank_no, e: str, x: str, sep: str) -> str:
-    """回檔篩選後基本版本身也在名單內，直接寫「基本版」，不寫成「基本進場 × 基本出場」。"""
-    return f"#{rank_no} " + ("基本版" if (e, x) == BASE else combo_label(e, x, sep))
+def combo_or_base(e: str, x: str, sep: str) -> str:
+    """組合名稱；基本版直接寫「基本版」，不寫成「基本進場 × 基本出場」。
+    不加 #名次 前綴（用戶 2026-11-11：名次塞在組合說明裡不是組合、也不說明組合，是無效資訊）。"""
+    return "基本版" if (e, x) == BASE else combo_label(e, x, sep)
 
 
-def drawdown_focus_table(df) -> str:
-    """回檔篩選後重排的前六，在 6% 可成交這一格；跟基本版比上色（基本版那列與自己相同、不上色）。"""
-    p, liq = FOCUS
-    b = _get(df, p, liq, *BASE)
-    rows = [_row(ranked_label(r["名次"], r["進場"], r["出場"], "<br>× "), _get(df, p, liq, r["進場"], r["出場"]), b)
-            for _, r in pd.read_csv(DRAWDOWN_RANK).head(TOP_MC).iterrows()]
-    return _wrap(rows, True)
-
-
-def mc_table(path: str = MC_FILE) -> str:
+def mc_table(path: str = MC_FILE, labels=None) -> str:
+    """labels：每列的組合名稱（依 CSV 列序）；不給時用 CSV 的名次＋組合。"""
     mc = pd.read_csv(path)
     head = ("<thead><tr><th>組合</th><th>交易數</th><th>勝率%</th><th>賺賠比</th><th>報酬%<br>悲觀P5</th>"
             "<th>報酬%<br>中位</th><th>報酬%<br>樂觀P95</th><th>區間<br>寬度</th><th>本金大虧%<br>(跌破5成)</th>"
             "<th>連敗<br>P95</th><th>回撤%<br>P95</th></tr></thead>")
     out = ['<div class="table-wrap"><table class="bt-table">', head, "<tbody>"]
-    for _, r in mc.iterrows():
+    for i, (_, r) in enumerate(mc.iterrows()):
         ret = {k: half_up(r[f"報酬% {k}_精確"], 0) for k in ("P5", "中位", "P95")}
         cells = [f"{int(r['交易數']):,}", f"{half_up(r['勝率%'], 1)}", f"{half_up(r['賺賠比'], 2)}",
                  *(f"+{ret[k]:,}" for k in ("P5", "中位", "P95")), f"{ret['P95'] - ret['P5']:,}",
                  f"{half_up(r['破產%'], 2)}", f"{int(r['最大連敗 P95'])}", f"{half_up(r['最大回撤% P95'], 1)}"]
-        out.append(f"<tr><td>{ranked_label(r['名次'], r['進場'], r['出場'], ' × ')}</td>"
-                   f"{''.join(f'<td>{c}</td>' for c in cells)}</tr>")
+        name = labels[i] if labels else combo_or_base(r['進場'], r['出場'], ' × ')
+        out.append(f"<tr><td>{name}</td>{''.join(f'<td>{c}</td>' for c in cells)}</tr>")
     out.append("</tbody></table></div>")
     return "\n".join(out)
 
@@ -195,23 +187,25 @@ def _closed_combo_trades(p: int, liq: bool, e: str, x: str) -> pd.DataFrame:
     return tr[tr["real_pnl"] != 0].reset_index(drop=True)
 
 
+def drawdown_cell(p: int, e: str, x: str) -> dict:
+    """一組一格（可成交）的回檔統計，欄位與口徑同〈雙底（六）〉build_article6_tables.drawdown（用戶 2026-11-08：完全照雙底（六））。
+    持有期間＝買進日～賣出日前一天的最低收盤，相對買進價。"""
+    tr = _closed_combo_trades(p, True, e, x)
+    dd = worst_close_pct(tr)
+    held = (tr["sell_date"] - tr["buy_date"]).dt.days.to_numpy()
+    win = (tr["real_pnl"] > 0).to_numpy()
+    win_dd = win & (dd <= -10)
+    return {"門檻%": p, "可成交": True, "交易次數": len(tr),
+            "超過一年%": (held > 365).mean() * 100,
+            "曾跌10%": (dd <= -10).mean() * 100, "曾跌20%": (dd <= -20).mean() * 100,
+            "賺錢曾跌10%": win_dd.sum() / win.sum() * 100,
+            "賺錢曾跌10%持有天中位數": float(np.median(held[win_dd]))}
+
+
 @functools.lru_cache(maxsize=4)
 def drawdown_combo(e: str, x: str) -> pd.DataFrame:
-    """可成交 3 格回檔統計，欄位與口徑同〈雙底（六）〉build_article6_tables.drawdown（用戶 2026-11-08：完全照雙底（六））。
-    持有期間＝買進日～賣出日前一天的最低收盤，相對買進價。"""
-    rows = []
-    for p in PCTS:
-        tr = _closed_combo_trades(p, True, e, x)
-        dd = worst_close_pct(tr)
-        held = (tr["sell_date"] - tr["buy_date"]).dt.days.to_numpy()
-        win = (tr["real_pnl"] > 0).to_numpy()
-        win_dd = win & (dd <= -10)
-        rows.append({"門檻%": p, "可成交": True, "交易次數": len(tr),
-                     "超過一年%": (held > 365).mean() * 100,
-                     "曾跌10%": (dd <= -10).mean() * 100, "曾跌20%": (dd <= -20).mean() * 100,
-                     "賺錢曾跌10%": win_dd.sum() / win.sum() * 100,
-                     "賺錢曾跌10%持有天中位數": float(np.median(held[win_dd]))})
-    return pd.DataFrame(rows)
+    """可成交 3 格回檔統計（每格見 drawdown_cell）。"""
+    return pd.DataFrame([drawdown_cell(p, e, x) for p in PCTS])
 
 
 def all_tables(df: pd.DataFrame) -> dict:

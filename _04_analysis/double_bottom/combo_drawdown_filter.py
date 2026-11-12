@@ -9,10 +9,15 @@
 - 判準：3 格的「曾跌 ≥20% 佔比」都 ≤ 同格基本版（基本進場 × 基本出場）。
 - 排名：只在通過的組合之間，可成交 3 格各依獲利因子排名，取平均名次；同分以期望值平均名次
   （用戶 2026-11-11：「直接以成交金額 > 1,000 萬的條件，原版的都要去掉」→ 裸版不進排名；11-10 的 6 格排名作廢）。
+- 逐格排名（〈雙底（八）〉用；用戶 2026-11-11：「幾% 買入條件跟賣出條件……應該是要完整的排列組合，並非 6%」）：
+  門檻 × 進場 × 出場 444 格各自當一個策略，只看該格「曾跌 ≥20% 佔比 ≤ 同門檻基本版」；通過者依精確獲利因子
+  由高到低、同分看期望值。交易數不到蒙地卡羅抽樣下限 T_LOW 的格子標「筆數不足」，挑選時順序往下遞補
+  （用戶：「如果成交量不符合預期就順序往下」）。
 
 執行：python _04_analysis/double_bottom/combo_drawdown_filter.py
 輸出：result/single_double_bottom_combo/_drawdown_filter.csv（每組每格的回檔統計＋是否通過）
-      result/single_double_bottom_combo/_drawdown_filter_rank.csv（通過者重新排名）
+      result/single_double_bottom_combo/_drawdown_filter_rank.csv（3 格都通過者重新排名）
+      result/single_double_bottom_combo/_drawdown_filter_cells.csv（逐格通過者排名＋是否夠筆數）
 """
 import os
 import sys
@@ -29,6 +34,7 @@ from _02_strategy.base.vbt import common  # noqa: E402
 from _02_strategy.double_bottom_strategy.combo_sweep import SUB, _tag  # noqa: E402
 from _02_strategy.double_bottom_strategy.single_double_bottom_strategy import RESULT_DIR  # noqa: E402
 from _04_analysis.double_bottom.combo_ranking import RANK_LIQ, load_summary  # noqa: E402
+from _04_analysis.double_bottom.double_bottom_montecarlo import DRAWDOWN_CELLS, T_LOW  # noqa: E402
 
 PCTS = (3, 6, 9)
 LIQ = True
@@ -37,6 +43,7 @@ BASE = ("base", "base")
 DROP = -20.0
 OUT = os.path.join(RESULT_DIR, SUB, "_drawdown_filter.csv")
 OUT_RANK = os.path.join(RESULT_DIR, SUB, "_drawdown_filter_rank.csv")
+OUT_CELLS = DRAWDOWN_CELLS
 
 
 def load_closes() -> dict:
@@ -70,9 +77,12 @@ def cell_drawdown(p: int, e: str, x: str, px: dict) -> dict:
     if np.isnan(dd).any():
         raise RuntimeError(f"{tag} 有交易算不出持有期間最低收盤")
     held = (tr["sell_date"] - tr["buy_date"]).dt.days.to_numpy()
+    pnl = tr["real_pnl"].to_numpy(dtype=float)
+    # 精確獲利因子／期望值（定義同 fast_multi.exact_stats）：彙總檔只存 4 位，逐格排名會出現假同分
     return {"門檻%": p, "可成交": LIQ, "進場": e, "出場": x, "交易次數": len(tr),
             "超過一年%": (held > 365).mean() * 100, "曾跌10%": (dd <= -10).mean() * 100,
-            "曾跌20%": (dd <= DROP).mean() * 100}
+            "曾跌20%": (dd <= DROP).mean() * 100,
+            "獲利因子_精確": pnl[pnl > 0].sum() / abs(pnl[pnl < 0].sum()), "期望值_精確": pnl.mean()}
 
 
 def rerank(passed: pd.DataFrame, summ: pd.DataFrame) -> pd.DataFrame:
@@ -87,6 +97,14 @@ def rerank(passed: pd.DataFrame, summ: pd.DataFrame) -> pd.DataFrame:
         raise RuntimeError("有通過的組合不滿 3 格")
     g = g.sort_values(["pf_rank_mean", "ev_rank_mean"]).reset_index()
     g.insert(0, "名次", range(1, len(g) + 1))
+    return g
+
+
+def rank_cells(df: pd.DataFrame) -> pd.DataFrame:
+    """逐格排名：只收本格通過的格子，精確獲利因子由高到低、同分看期望值；標出交易數是否到抽樣下限。"""
+    g = df[df["本格通過"]].sort_values(["獲利因子_精確", "期望值_精確"], ascending=False).reset_index(drop=True)
+    g.insert(0, "名次", range(1, len(g) + 1))
+    g["夠筆數"] = g["交易次數"] >= T_LOW
     return g
 
 
@@ -109,6 +127,9 @@ def main() -> int:
     df.to_csv(OUT, index=False, encoding="utf-8-sig")
     rank = rerank(df[df["通過"]], summ)
     rank.to_csv(OUT_RANK, index=False, encoding="utf-8-sig")
+    cells = rank_cells(df)
+    cells.to_csv(OUT_CELLS, index=False, encoding="utf-8-sig")
+    print(f"逐格通過 {len(cells)} / {len(df)} 格，其中夠筆數 {int(cells['夠筆數'].sum())} 格")
     print(f"通過 {len(rank)} / {len(combos)} 種｜{time.time() - t0:.0f} 秒")
     print(f"→ {OUT}\n→ {OUT_RANK}")
     print(rank.to_string(index=False))

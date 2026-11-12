@@ -11,8 +11,9 @@
 
 執行：python _04_analysis/double_bottom/double_bottom_montecarlo.py [--drawdown]
 輸出：result/single_double_bottom_combo/_montecarlo_top6.csv
-      加 --drawdown：改取 combo_drawdown_filter 重排（可成交 3 格）的前五 → _montecarlo_drawdown_top5.csv
-      （用戶 2026-11-11：〈雙底（八）〉加跌 20% 門檻後選五組進蒙地卡羅，含基本版）
+      加 --drawdown：改取 combo_drawdown_filter 的逐格排名（門檻 × 進場 × 出場），跳過交易數 < T_LOW 的格子，
+      取前五 → _montecarlo_drawdown_top5.csv；每組用自己那一格的逐筆交易
+      （用戶 2026-11-11：〈雙底（八）〉不固定 6%，「如果成交量不符合預期就順序往下」）
 """
 import os
 import sys
@@ -40,20 +41,21 @@ TRADING_DAYS = 5_949
 T_LOW, T_HIGH = TRADING_DAYS * 3, TRADING_DAYS * 4
 OUT = os.path.join(RESULT_DIR, SUB, "_montecarlo_top6.csv")
 DRAWDOWN_RANK = os.path.join(RESULT_DIR, SUB, "_drawdown_filter_rank.csv")
+DRAWDOWN_CELLS = os.path.join(RESULT_DIR, SUB, "_drawdown_filter_cells.csv")
 OUT_DRAWDOWN = os.path.join(RESULT_DIR, SUB, "_montecarlo_drawdown_top5.csv")
 
 
-def trades_path(entry: str, exit_key: str) -> str:
-    tag = _tag(PCT, LIQ, entry, exit_key)
+def trades_path(entry: str, exit_key: str, pct: float = PCT) -> str:
+    tag = _tag(pct, LIQ, entry, exit_key)
     return os.path.join(RESULT_DIR, SUB, tag, f"single_double_bottom_{tag}_trades.csv")
 
 
-def article_row(rank: int, entry: str, exit_key: str, trades: pd.DataFrame, mc: dict) -> dict:
+def article_row(rank: int, entry: str, exit_key: str, trades: pd.DataFrame, mc: dict, pct: float = PCT) -> dict:
     """欄位同 MACD（十）蒙地卡羅表；勝率／平均獲利／平均虧損是逐筆統計，不是蒙地卡羅產物。"""
     s = summarize_trades(trades)
     exact = {k: (mc[f"最終資金_{k}"] - INIT_CASH) / INIT_CASH * 100 for k in ("P5", "中位", "P95")}
     win, loss = s["平均獲利報酬率(%)"], s["平均虧損報酬率(%)"]
-    return {"名次": rank, "進場": entry, "出場": exit_key, "交易數": mc["歷史筆數"],
+    return {"名次": rank, "門檻%": round(pct * 100), "進場": entry, "出場": exit_key, "交易數": mc["歷史筆數"],
             "抽樣模式": "抽區間" if mc["歷史筆數"] >= T_LOW else "全納",
             "報酬% P5": round(exact["P5"], 1), "報酬% 中位": round(exact["中位"], 1),
             "報酬% P95": round(exact["P95"], 1), "信賴區間寬度": round(exact["P95"] - exact["P5"], 1),
@@ -65,16 +67,21 @@ def article_row(rank: int, entry: str, exit_key: str, trades: pd.DataFrame, mc: 
 
 
 def main() -> int:
-    # --drawdown：改用回檔篩選後重新排名的前六（combo_drawdown_filter.py；用戶 2026-11-08「把通過的前六名拿去跑蒙地卡羅」）
+    # --drawdown：改用回檔篩選後的逐格排名（combo_drawdown_filter.py），只取交易數到抽樣下限的格子
     filtered = "--drawdown" in sys.argv[1:]
     out = OUT_DRAWDOWN if filtered else OUT
     t0 = time.time()
     n = TOP_N_DRAWDOWN if filtered else TOP_N
-    top = (pd.read_csv(DRAWDOWN_RANK) if filtered else rank_combos()).head(n)
+    if filtered:
+        cells = pd.read_csv(DRAWDOWN_CELLS)
+        top = cells[cells["夠筆數"]].head(n)
+    else:
+        top = rank_combos().head(n).assign(**{"門檻%": round(PCT * 100)})
     print(f"前 {n} 組 × {PATHS:,} 條路徑｜T ∈ [{T_LOW:,}, {T_HIGH:,}]", flush=True)
     rows = []
     for _, r in top.iterrows():
-        path = trades_path(r["進場"], r["出場"])
+        pct = r["門檻%"] / 100
+        path = trades_path(r["進場"], r["出場"], pct)
         if not os.path.isfile(path):
             raise SystemExit(f"找不到逐筆交易：{path}（先跑 combo_sweep）")
         trades = pd.read_csv(path)
@@ -82,8 +89,8 @@ def main() -> int:
         trades = trades[trades["real_pnl"] != 0]
         mc = monte_carlo(trades, initial_cash=INIT_CASH, n_sims=PATHS,
                          ruin_ratio=RUIN_RATIO, t_low=T_LOW, t_high=T_HIGH)
-        rows.append(article_row(int(r["名次"]), r["進場"], r["出場"], trades, mc))
-        print(f"  #{r['名次']} {r['進場']} × {r['出場']}：{mc['歷史筆數']:,} 筆｜{time.time() - t0:.0f} 秒", flush=True)
+        rows.append(article_row(int(r["名次"]), r["進場"], r["出場"], trades, mc, pct))
+        print(f"  #{r['名次']} {r['門檻%']}% {r['進場']} × {r['出場']}：{mc['歷史筆數']:,} 筆｜{time.time() - t0:.0f} 秒", flush=True)
     df = pd.DataFrame(rows)
     df.to_csv(out, index=False, encoding="utf-8-sig")
     print(f"→ {out}")
