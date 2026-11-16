@@ -69,7 +69,8 @@ def main() -> int:
             for kind in ORDERINGS:
                 res = run_panel(sizing, panel, prios[kind], want_equity=True)
                 curves[equity_key(label, mname, kind)] = res["equity"].to_numpy(np.float64)
-                runs.append(row_of(res, 交易策略=label, 投法=mname, 排序=kind, 份數=n_units))
+                runs.append(row_of(res, 交易策略=label, 投法=mname, 排序=kind, 份數=n_units)
+                            | {"期末清算淨額_精確": res["summary"]["期末清算淨額_精確"]})
                 print(f"  {mname}({n_units}) {kind}：{runs[-1]['交易次數']:,} 筆｜擋單 {runs[-1]['擋單']:,}",
                       flush=True)
 

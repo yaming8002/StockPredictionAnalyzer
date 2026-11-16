@@ -235,4 +235,10 @@ def run_panel(sizing, panel: dict, prio: np.ndarray, want_equity: bool = True) -
         summary["最終權益" + EXACT] = float(val.iloc[-1])
         summary["最大回撤(%)" + EXACT] = float(dd.max()) * 100.0
         summary["年化報酬(%)" + EXACT] = ((float(val.iloc[-1]) / sizing.initial_cash) ** (1 / years) - 1) * 100
+        # 期末清算淨額：最後一天以收盤價把未平倉部位全部賣出、扣賣出手續費與證交稅後的帳戶淨額。
+        # 跟 0050「期末全部賣出」比時用這個數，總獲利與資金倍數才是同一個口徑（最終權益只是市值、不扣賣出費稅）
+        last_close = close.ffill().iloc[-1].to_numpy(np.float64)
+        held = pos > 0.0
+        _, sell_fee = common.reconstruct_fees(last_close[held], last_close[held], pos[held])
+        summary["期末清算淨額" + EXACT] = float(val.iloc[-1]) - float(sell_fee.sum())
     return {"trades": trades, "summary": summary, "blocked_orders": int(blocked), "equity": val}

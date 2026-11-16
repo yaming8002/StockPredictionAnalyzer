@@ -22,7 +22,8 @@ for p in (_root, _here):
         sys.path.insert(0, p)
 
 from build_article2_tables import half_up  # noqa: E402
-from build_article11_tables import BENCH, TOP_N, all_2015, all_tables11, conclusion, fmt2, ranked  # noqa: E402
+from build_article11_tables import (BENCH, P15, TOP_N, all_2015, all_tables11, conclusion, fmt2,  # noqa: E402
+                                    picks_2015, ranked)
 from verify_article4 import article_path  # noqa: E402
 
 SLUG = "double-bottom-conclusion"
@@ -41,8 +42,10 @@ def claims() -> dict:
     sixth = top.iloc[-1]
     best_cagr = a15.loc[a15["年化報酬率%"].idxmax()]
     best_rr = a15.loc[a15["報酬回撤比"].idxmax()]
-    first, first15 = rk.iloc[0], picks.iloc[0]
-    rr_rank = int((picks["報酬回撤比"] > first15["報酬回撤比"]).sum()) + 1
+    # 表二排序：依 2015–2025 總獲利嚴格遞減；資金倍數必須同向（同一段期間、同樣 100 萬起跑，兩者應一致）
+    t2 = picks_2015(conc)
+    t2_sorted = (t2[P15].is_monotonic_decreasing and t2["資金倍數"].is_monotonic_decreasing
+                 and t2["同期名次"].tolist() == list(range(1, len(t2) + 1)))
     return {
         "比例在前": ((rk.head(15)["投法"] == "比例").all(), "比例投入的 15 組全部排在固定金額投入的 15 組前面"),
         "前六": ((top.head(5)["排序"] == "低價").all() and sixth["排序"] != "低價",
@@ -52,7 +55,6 @@ def claims() -> dict:
         "年化最高": (best_cagr["年化報酬率%"] < b["年化報酬率%"],
                  f"年化最高的是{_name(best_cagr)}（{fmt2('年化報酬率%', best_cagr['年化報酬率%'])}%），"
                  f"0050 是 {fmt2('年化報酬率%', b['年化報酬率%'])}%"),
-        "倍數": (True, f"{fmt2('資金倍數', best_cagr['資金倍數'])} 倍對 {fmt2('資金倍數', b['資金倍數'])} 倍"),
         "30年化": ((a15["年化報酬率%"] < b["年化報酬率%"]).all() and len(a15) == 30,
                  f"30 組的年化落在 {fmt2('年化報酬率%', a15['年化報酬率%'].min())}%～"
                  f"{fmt2('年化報酬率%', a15['年化報酬率%'].max())}%，沒有一組追上 0050"),
@@ -62,10 +64,7 @@ def claims() -> dict:
         "回撤比最高": (best_rr["報酬回撤比"] < b["報酬回撤比"],
                   f"報酬回撤比最高的是{_name(best_rr)}（{fmt2('報酬回撤比', best_rr['報酬回撤比'])}），"
                   f"0050 是 {fmt2('報酬回撤比', b['報酬回撤比'])}"),
-        "第一名兩段": (True, f"全期年化 {half_up(first['年化報酬(%)'], 2)}%、最大回撤 {half_up(first['最大回撤(%)'], 1)}%；"
-                         f"2015–2025 是年化 {fmt2('年化報酬率%', first15['年化報酬率%'])}%、最大回撤 "
-                         f"{fmt2('最大回撤%', first15['最大回撤%'])}%"),
-        "第一名同期": (rr_rank > 1, f"全期第 1 名在 2015–2025 的報酬回撤比排六組裡的第 {rr_rank}"),
+        "表二排序": (t2_sorted, "本表依 2015–2025 總獲利由高到低排。"),
     }
 
 

@@ -95,6 +95,60 @@ def equity_0050(cal: pd.DatetimeIndex, init_cash: float = 1_000_000.0) -> pd.Dat
                         index=pd.Index(cal, name="日期"))
 
 
+def trade_0050(cal: pd.DatetimeIndex, init_cash: float = 1_000_000.0) -> dict:
+    """
+    0050 實際買賣一次的版本（雙底結論篇用；equity_0050 與錨點不動，其他系列照舊）：
+      首日開盤整股買進（扣手續費）→ 配息當日以收盤價整股再投入（扣手續費，零頭留現金）
+      → 末日收盤全部賣出（扣手續費＋證交稅，稅率沿用 common.DUES，與策略同一常數）。
+    手續費／稅的算法沿用 common.reconstruct_fees（min 20、無條件進位），與策略逐筆交易同一套。
+    價格與配息都已還原分割（見 equity_0050 說明），股數也是還原後單位；split 欄有值時先檢查價格
+    沒有斷層，避免資料改成未還原卻沒發現。
+    回傳：逐日市值（現金＋持股收盤市值，算最大回撤用）與期末清算淨額。
+    """
+    px = pd.read_parquet(os.path.join(common.DATA_DIR, f"{BENCH}.parquet"))
+    close = px["close"].reindex(cal).ffill().to_numpy(np.float64)
+    first_open = float(px["open"].reindex(cal).iloc[0])
+    if not np.isfinite(first_open) or not np.isfinite(close).all():
+        raise ValueError("0050 首日開盤或區間收盤有缺值，無法計算買進持有")
+    dv = pd.read_parquet(common.require_dividend_file())
+    dv = dv[dv["stock_id"] == BENCH]
+    for _, r in dv[(dv["split"] > 0) & (dv["date"] >= cal[0]) & (dv["date"] <= cal[-1])].iterrows():
+        k = int(np.searchsorted(cal.to_numpy(), np.datetime64(pd.Timestamp(r["date"]), "ns")))
+        if 0 < k < len(close) and abs(close[k] / close[k - 1] - 1) > 0.4:
+            raise ValueError(f"0050 在 {r['date']} 分割前後價格有斷層，價格可能未還原")
+    days = cal.to_numpy()
+    per_day = np.zeros(len(close))
+    for _, r in dv[dv["dividend"] > 0].iterrows():
+        when = np.datetime64(pd.Timestamp(r["date"]), "ns")
+        if when < days[0]:
+            continue
+        k = int(np.searchsorted(days, when))
+        if k < len(days):
+            per_day[k] += r["dividend"]
+
+    def buy(cash: float, price: float):
+        """可用現金能買的最多整股（含手續費），回傳 (股數, 剩餘現金)。"""
+        qty = float(np.floor(cash / (price * (1 + common.COMMISSION))))
+        while qty > 0:
+            fee, _ = common.reconstruct_fees([price], [price], [qty])
+            if price * qty + fee[0] <= cash:
+                return qty, cash - price * qty - fee[0]
+            qty -= 1
+        return 0.0, cash
+
+    shares, cash = buy(init_cash, first_open)
+    eq = np.empty(len(close))
+    for i in range(len(close)):
+        if per_day[i] > 0 and shares > 0:
+            cash += shares * per_day[i]
+            add, cash = buy(cash, close[i])
+            shares += add
+        eq[i] = cash + shares * close[i]
+    _, sell_fee = common.reconstruct_fees([close[-1]], [close[-1]], [shares])
+    net_end = cash + shares * close[-1] - float(sell_fee[0])
+    return {"市值": eq, "期末清算淨額": net_end}
+
+
 def main() -> int:
     """以 0050 自己的交易日曆驗算錨點，並把逐日明細與統計存檔（result/ 不進版控）。"""
     px = pd.read_parquet(os.path.join(common.DATA_DIR, f"{BENCH}.parquet")).sort_index()

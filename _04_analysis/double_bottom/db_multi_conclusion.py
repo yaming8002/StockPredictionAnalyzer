@@ -11,7 +11,12 @@
 **為什麼期間是 2015–2025**：0050 在 2015 以前的價格與配息不可靠，對照區間、含息算法、錨點都定義在
 `_04_analysis/benchmark/benchmark_0050.py`。策略本身的評估仍以（九）（十）的 2002–2025 全期為準。
 
-**比較基準＝報酬回撤比（年化報酬率% ÷ 最大回撤%）**，另列資金倍數、年化、最大回撤。
+**比較基準＝報酬回撤比（年化報酬率% ÷ 最大回撤%）**，另列總獲利、資金倍數、年化、最大回撤。
+
+**兩邊都在 2025 年最後一個交易日收盤全部賣出**（用戶 2026-11-16 定）：策略把未平倉部位、0050 把全部持股
+以收盤價賣出並扣手續費＋證交稅（0050 稅率也用 common.DUES）。總獲利＝清算淨額 − 本金、資金倍數＝清算淨額 ÷ 本金、
+年化由資金倍數換算，三欄同一個口徑；最大回撤仍用逐日市值權益。0050 改成首日開盤買進（見 benchmark_0050.trade_0050），
+原本的 equity_0050 與錨點 ×5.51／16.81%／33.8% 不動。
 
 執行（先跑回測段，再跑這支）：
     python _03_multi_strategy/double_bottom/db_conclusion_equity.py
@@ -34,14 +39,24 @@ import pandas as pd  # noqa: E402
 from _03_multi_strategy.double_bottom.db_conclusion_equity import (EQUITY_FILE, RUNS_FILE,  # noqa: E402
                                                                     WIN_START, equity_key)
 from _03_multi_strategy.double_bottom.db_multi_driver import INIT_CASH, OUT, PATH  # noqa: E402
-from _04_analysis.benchmark.benchmark_0050 import BENCHMARK_START, equity_0050  # noqa: E402
-from _04_analysis.macd.macd_multi_conclusion import exact_curve  # noqa: E402
+from _04_analysis.benchmark.benchmark_0050 import BENCHMARK_START, trade_0050  # noqa: E402
 
 EXACT = "_精確"
 TOP_N = 6
 BENCH = "0050 買進持有（含息）"
 CONC_FILE = os.path.join(OUT, "db_multi_conclusion.csv")
+PROFIT = "2015總獲利(萬)" + EXACT   # 期末全部賣出後的總獲利（萬）
 ALL_FILE = os.path.join(OUT, "db_multi_conclusion_all.csv")
+
+
+def liquidated(eq: np.ndarray, net_end: float, years: float) -> dict:
+    """期末全部賣出口徑：總獲利／資金倍數／年化由清算淨額算，最大回撤由逐日市值算（皆未四捨五入）。"""
+    mult = net_end / INIT_CASH
+    cagr = (mult ** (1.0 / years) - 1.0) * 100.0
+    peak = np.maximum.accumulate(eq)
+    dd = ((peak - eq) / peak).max() * 100.0
+    return {PROFIT: (net_end - INIT_CASH) / 10_000, "資金倍數" + EXACT: mult, "年化報酬率%" + EXACT: cagr,
+            "最大回撤%" + EXACT: dd, "報酬回撤比" + EXACT: cagr / dd if dd > 0 else None}
 
 
 def main() -> int:
@@ -59,7 +74,8 @@ def main() -> int:
     for _, r in runs.iterrows():
         eq = equity[equity_key(r["交易策略"], r["投法"], r["排序"])].to_numpy(np.float64)
         rows.append({k: r[k] for k in ("交易策略", "投法", "排序", "份數", "交易次數", "擋單")}
-                    | {"2015總獲利(萬)" + EXACT: r["總獲利(萬)" + EXACT]} | exact_curve(eq, years))
+                    | {"2015已平倉總獲利(萬)" + EXACT: r["總獲利(萬)" + EXACT]}
+                    | liquidated(eq, float(r["期末清算淨額" + EXACT]), years))
     all_2015 = pd.DataFrame(rows)
 
     full = pd.read_csv(PATH)
@@ -74,8 +90,8 @@ def main() -> int:
     if picked["資金倍數" + EXACT].isna().any():
         raise SystemExit("前幾名有組合在 2015–2025 權益裡找不到，請先重跑回測段")
 
-    bench = {"交易策略": BENCH, "投法": "—", "排序": "—"} | exact_curve(
-        equity_0050(cal, INIT_CASH)["市值"].to_numpy(np.float64), years)
+    b = trade_0050(cal, INIT_CASH)
+    bench = {"交易策略": BENCH, "投法": "—", "排序": "—"} | liquidated(b["市值"], b["期末清算淨額"], years)
     out = pd.concat([picked, pd.DataFrame([bench])], ignore_index=True)
     all_2015 = all_2015.merge(full[["交易策略", "投法", "排序", "總獲利(萬)" + EXACT]]
                               .rename(columns={"總獲利(萬)" + EXACT: "全期總獲利(萬)" + EXACT}),
@@ -85,7 +101,7 @@ def main() -> int:
     all_2015.to_csv(ALL_FILE, index=False, encoding="utf-8-sig")
     show = [c for c in out.columns if c not in ("份數",)]
     print(out[show].round(3).to_string(index=False))
-    print(f"（0050 錨點：×5.51／16.81%／33.8%）\n→ {CONC_FILE}、{ALL_FILE}")
+    print(f"（0050 已改期末全部賣出口徑，不等於錨點 ×5.51／16.81%）\n→ {CONC_FILE}、{ALL_FILE}")
     return 0
 
 
