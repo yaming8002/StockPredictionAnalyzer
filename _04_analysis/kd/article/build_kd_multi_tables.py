@@ -4,7 +4,7 @@
 
 資料來源（SPA 回測／分析段輸出）：
   result/kd_multi/units.csv、kd_multi_result.csv   ← _03_multi_strategy/kd/kd_multi_driver.py
-  result/kd_multi/kd_conclusion.csv、kd_conclusion_vs_0050.csv ← _04_analysis/kd/kd_multi_conclusion.py
+  result/kd_multi/kd_conclusion_top.csv、kd_conclusion_vs_0050.csv ← _04_analysis/kd/kd_multi_conclusion.py
 kd_multi_result.csv 的「隨機」列＝1,000 次隨機買入順序中**最終權益取中位那次**的完整規格
 （＝文章表註「隨機列＝1000 次隨機順序取中位那次」），資金倍數中位／P5／P95 另由 1,000 次統計。
 
@@ -12,7 +12,7 @@ kd_multi_result.csv 的「隨機」列＝1,000 次隨機買入順序中**最終�
   結果表：策略區塊依「低價」總獲利高到低、區塊內依總獲利高到低；獲利因子與總獲利兩欄對同組隨機列
           比，贏＝粉紅(up)、輸＝淺綠(down)，隨機列本身不標色。
   （七）投法對照表：低價優先的定額／比例兩列，比例列對定額列比高低。
-  （八）第一表照 kd_conclusion.csv（報酬回撤比高到低），第二表＝0050 ＋ 同六列。
+  （八）第一表＝（六）（七）全期總獲利前六名（kd_conclusion_top.csv），第二表＝0050 ＋ 同六組的 2015–2025。
 多股 CSV 沒有逐筆交易可重算，顯示值落在 .5 的格子見 kd_article_common.multi_cell。
 
 執行：
@@ -119,8 +119,6 @@ def compare_rows() -> list:
     return out
 
 
-CONC_COLS = COLS[:]
-CONC_COLS[0], CONC_COLS[1] = ("交易次數", 0), ("擋單", 0)
 CONC_EXTRA = [("資金倍數", 2), ("年化報酬率%", 2), ("最大回撤%", 1), ("報酬回撤比", 2)]
 
 
@@ -130,19 +128,22 @@ def read_conc(name: str) -> pd.DataFrame:
 
 
 def conclusion_rows() -> tuple:
-    c = read_conc("kd_conclusion.csv")
+    """
+    （八）兩張表（2026-11-20 改，比照 MACD（十三））：
+      表一＝（六）（七）全期 36 組依總獲利取前 6（名次｜交易策略｜投法｜排序｜（六）（七）主表 10 欄）；
+      表二＝0050 ＋ 同 6 組在 2015–2025 的資金倍數／年化／回撤／報酬回撤比，依全期名次排。
+    """
+    top = read_conc("kd_conclusion_top.csv")
     t1 = []
-    for _, r in c.iterrows():
-        row = [("", LONG[r["交易策略"]]), ("", r["投入"])]
-        where = f"結論·{r['交易策略']}·{r['投入']}"
-        row += [("", fmt(multi_cell(r, col, nd, where), nd)) for col, nd in CONC_COLS + CONC_EXTRA]
+    for _, r in top.iterrows():
+        row = [("", str(r["全期名次"])), ("", LONG[r["交易策略"]]), ("", r["投法"]), ("", r["排序"])]
+        row += [("", val(r, col, nd)) for col, nd in COLS]
         t1.append(row)
     vs = read_conc("kd_conclusion_vs_0050.csv")
     t2 = []
     for i, r in vs.iterrows():
-        name = r["做法"]
-        for k, v in LONG.items():
-            name = name.replace(k, v)
+        name = (r["交易策略"] if i == 0
+                else f"{LONG[r['交易策略']]} · {r['投法']} · {r['排序']}")
         cells = [name] + [fmt(r[col], nd) for col, nd in CONC_EXTRA]
         t2.append([("", f"<b>{x}</b>" if i == 0 else x) for x in cells])
     return t1, t2
@@ -157,7 +158,7 @@ def tables_for(article: int) -> list:
             out.append(("（七）投法對照表", compare_rows()))
         return out
     t1, t2 = conclusion_rows()
-    return [("（八）六種策略", t1), ("（八）對 0050", t2)]
+    return [("（八）全期總獲利前六名", t1), ("（八）對 0050", t2)]
 
 
 def main() -> int:
