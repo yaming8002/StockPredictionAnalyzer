@@ -73,7 +73,7 @@ def spec_row(label: str, variant: str, pf_nd: int, mode: str, base=None, cols=SP
 def article1() -> list:
     raw, amt = "raw__golden__death", BASE
     return [("（一）表1 全市場", [spec_row("KD 黃金／死亡交叉", raw, 2, "posneg")]),
-            ("（一）表2 加流動性門檻", [
+            ("（一）表2 加可成交門檻", [
                 spec_row("KD 交叉<br>（無門檻）", raw, 2, "posneg"),
                 spec_row("KD 交叉 ＋ 成交金額 > 1,000 萬", amt, 2, "posneg")])]
 

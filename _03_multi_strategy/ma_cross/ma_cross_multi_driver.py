@@ -14,7 +14,7 @@
   no_filter   reference 2026-07-08：純黃金交叉、無濾網；定額每筆 1 萬；比例 1/30、下限 1 萬。
   stock_id    reference 2026-06-19：純黃金交叉、定額每筆 1 萬、買入順序＝股票代號（不挑單）。
 
-排序：流動性（5 日均量×收盤）／低價／高價 三種固定排序 ＋ 隨機排序 × N 次
+排序：成交金額（5 日均量×收盤）／低價／高價 三種固定排序 ＋ 隨機排序 × N 次
 （每次每天每檔抽一個亂數當優先序，種子 SEED0＋第 k 次；取「最終權益」中位數那一次的完整列，
 另附最終權益與總獲利的 5%／95% 分位（總獲利另含中位數）與「已實現權益曾跌破本金 8 成」的次數比例）。stock_id 任務只跑代號序。
 
@@ -95,7 +95,7 @@ def _prio_panels(panel: dict) -> dict:
     turn = pd.DataFrame({sid: _DATA[sid]["volume"].rolling(5).mean() * _DATA[sid]["close"]
                          for sid in close.columns}).reindex(index=close.index, columns=close.columns)
     c = close.to_numpy(np.float64)
-    return {"流動性": turn.to_numpy(np.float64), "低價": -c, "高價": c}
+    return {"成交金額": turn.to_numpy(np.float64), "低價": -c, "高價": c}
 
 
 def _row(pair, sname, n_units, per, order, res) -> dict:

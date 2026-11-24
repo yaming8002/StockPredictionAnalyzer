@@ -78,10 +78,10 @@ def ranking_text_claims(ck: Checker, text: str, rk: pd.DataFrame):
     """盤點節：排序、投法、策略組成與名次句。"""
     top = rk.head(TOP_N)
     ck.check((top["排序"] == "低價").all(), "前六名全是低價優先")
-    for order, want in (("流動性", 9), ("高價", 11)):
+    for order, want in (("成交金額", 9), ("高價", 11)):
         b = rk[rk["排序"] == order].iloc[0]
         ck.check(b["名次"] == want, f"{order}最好排第 {want}（實際 {b['名次']}）")
-        ck.contains(text, f"{order}最好的一組排第 {b['名次']}（{LONG[b['交易策略']]} · {b['投法']}，"
+        ck.contains(text, f"{order}{'優先' if order == '成交金額' else ''}最好的一組排第 {b['名次']}（{LONG[b['交易策略']]} · {b['投法']}，"
                           f"{fmt(b['總獲利(萬)'], 0)} 萬）", f"{order}最好名次")
     n_pct = int((top["投法"] == "比例").sum())
     ck.check(n_pct == 4, f"比例佔 {n_pct} 席")
@@ -147,7 +147,7 @@ def main() -> int:
     rk = ranked_full()
     ranking_text_claims(ck, text, rk)
     bench_text_claims(ck, text, vs, allc)
-    ck.contains(text, f"流動性、高價優先最好的也只排到第 {rk[rk['排序'] == '流動性'].iloc[0]['名次']}、"
+    ck.contains(text, f"成交金額、高價優先最好的也只排到第 {rk[rk['排序'] == '成交金額'].iloc[0]['名次']}、"
                       f"第 {rk[rk['排序'] == '高價'].iloc[0]['名次']}", "重點整理排序名次")
     for phrase, what in TEXT_CLAIMS:
         ck.contains(text, phrase, what)

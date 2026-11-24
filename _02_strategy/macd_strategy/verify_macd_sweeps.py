@@ -55,7 +55,7 @@ FILTER_LINE = {"adx25": "①趨勢強度 ADX>25", "rsi": "②RSI<50 且上升", 
                "hist_rising": "④柱狀圖連兩根遞增", "cmf": "⑤量能 CMF>0",
                "ma200": "⑥趨勢過濾 收盤>MA200", "align": "⑦均線多頭排列 5>20>60",
                "high250": "⑧創 250 日新高", "gap": "⑨跳空（開盤>昨日最高）"}
-LIQ_LINE = "# 優化：流動性（成交金額 > 1,000 萬）"
+LIQ_LINE = "# 優化：可成交（成交金額 > 1,000 萬）"
 SELL_LINE = {"death": "# 基礎 A 交叉 / C 背離：死亡交叉", "zero_down": "# 基礎 B 零軸：DIF 下穿 0",
              "beardiv": "# 矩陣用：頂背離出場"}
 APPEND_LINE = {"ma200": "# ＋跌破 MA200", "supertrend": "# ＋Supertrend(10,3) 翻空",

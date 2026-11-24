@@ -176,7 +176,7 @@ class VbtMultiStrategy:
     # ── 現成排序 helper（非主軸；priority() 覆寫時可直接呼叫，省得重寫分數）──────
     @staticmethod
     def prio_by_turnover(df: pd.DataFrame, window: int = 5) -> pd.Series:
-        """流動性優先：5 日均量 × 收盤價（成交金額基準，與流動性門檻同口徑）。"""
+        """成交金額優先：5 日均量 × 收盤價（與可成交門檻同口徑）。"""
         return df["volume"].rolling(window).mean() * df["close"]
 
     @staticmethod

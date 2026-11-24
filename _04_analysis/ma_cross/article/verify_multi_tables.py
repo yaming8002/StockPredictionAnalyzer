@@ -6,7 +6,7 @@
   0 份數表        S（單股蒙地卡羅最大連敗 P95）、份數、每筆投入
   1 分批對照表    等分 20 份 vs 公式，各自隨機 ×1,000：擋單、本金<80%、總獲利 P5／中位／P95、中位差
   2 排序對照表    公式分批下四排序的總獲利（萬）與期望值/筆（元），以隨機為基準上色
-  3~6 附錄        流動性／低價／高價／隨機 四張完整表（10 欄＋擋單）
+  3~6 附錄        成交金額／低價／高價／隨機 四張完整表（10 欄＋擋單）
 「隨機」列一律是 driver 的代表列＝1,000 次裡最終權益中位數那一次。
 """
 import os
@@ -41,7 +41,7 @@ def verify_units(ck: Checker, table: str, df, mode: str) -> None:
     ck.check([r[0][1] for r in rows] == PAIRS, "份數表列順序／組數不符")
     for row in rows:
         p = row[0][1]
-        r = mrow(df, p, sizing_names(mode)[0], "流動性")
+        r = mrow(df, p, sizing_names(mode)[0], "成交金額")
         want_n = units(int(s[p]))[0 if mode == "定額" else 1]
         ck.check(int(row[1][1]) == int(s[p]), f"份數表 {p} S：文 {row[1][1]} vs {s[p]}")
         ck.check(int(row[2][1]) == int(r["份數"]) == want_n, f"份數表 {p} 份數：文 {row[2][1]} vs {r['份數']}/{want_n}")

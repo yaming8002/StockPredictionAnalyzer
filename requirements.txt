@@ -1,5 +1,6 @@
 # 策略回測（vbt 版均線交叉）相依套件
 vectorbt
-pandas
+pandas<3      # pandas 3 預設行為有破壞性改變，且 vectorbt 1.0.0 不支援
 numpy
 scipy
+plotly<7      # vectorbt 1.0.0 需要；plotly 7 移除 scattermapbox，import 會失敗

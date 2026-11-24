@@ -57,7 +57,7 @@ def per_strategy(df: pd.DataFrame) -> pd.DataFrame:
                      "寬度": (rnd["總獲利(萬)P95" + EXACT] - rnd["總獲利(萬)P5" + EXACT]) / rnd["總獲利(萬)"],
                      "未平倉": lo["期末未平倉"], "期末差": lo["最終權益"] / 1e4 - 100 - lo["總獲利(萬)"],
                      "低勝隨": all(b.loc["低價", c] > rnd[c] for c in ("獲利因子", "總獲利(萬)")),
-                     "高輸隨": all(b.loc[k, c] < rnd[c] for k in ("高價", "流動性") for c in ("獲利因子", "總獲利(萬)"))})
+                     "高輸隨": all(b.loc[k, c] < rnd[c] for k in ("高價", "成交金額") for c in ("獲利因子", "總獲利(萬)"))})
     return pd.DataFrame(rows).set_index("name")
 
 
@@ -76,7 +76,7 @@ def claims(df: pd.DataFrame, single: pd.DataFrame) -> dict:
         "份數": (True, f"切出來都是 {df['份數'].min()}～{df['份數'].max()} 份，每筆 "
                        f"{half_up(min(amounts), 0):,}～{half_up(max(amounts), 0):,} 元"),
         "S": (True, f"最大連敗 P95（32～34 次）"),
-        "低價全贏": (s["低勝隨"].all() and s["高輸隨"].all(), "**低價優先五組都贏過隨機**，高價優先、流動性優先五組都輸給隨機"),
+        "低價全贏": (s["低勝隨"].all() and s["高輸隨"].all(), "**低價優先五組都贏過隨機**，高價優先、成交金額優先五組都輸給隨機"),
         "總獲利最高": (lo["總獲利(萬)"].idxmax() == "基本版",
                     f"總獲利最高的是基本版（低價 {half_up(lo.loc['基本版', '總獲利(萬)'], 0)} 萬）"),
         "PF最高": (lo["獲利因子"].idxmax() == NAMES["rise_base"] and max(pf_single, key=pf_single.get) == "rise_base",
@@ -107,7 +107,7 @@ def claims(df: pd.DataFrame, single: pd.DataFrame) -> dict:
                          f"{_rng(s['EV多'] * 100, 1, '%')}），成交筆數只多 {_rng(s['筆數多'] * 100, 1, '%')}"),
         "整理年化": (True, f"**年化報酬 {_rng(df['年化報酬(%)'], 2, '%')}、最大回撤 {_rng(df['最大回撤(%)'], 1, '%')}**；"
                          f"已實現權益最低 {_rng(df['已實現權益最低(%)'], 1, '%')}"),
-        "摘要": (True, f"擋單只有成交筆數的 {_rng(s['擋單倍數'], 2)} 倍；低價優先五組都贏過隨機，高價與流動性優先五組都輸給"
+        "摘要": (True, f"擋單只有成交筆數的 {_rng(s['擋單倍數'], 2)} 倍；低價優先五組都贏過隨機，高價與成交金額優先五組都輸給"
                        f"隨機，低價對隨機的總獲利多 {_rng(s['低對隨'] * 100, 1, '%')}"),
     }
 

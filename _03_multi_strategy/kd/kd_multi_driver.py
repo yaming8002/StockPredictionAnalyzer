@@ -14,7 +14,7 @@ verify_kd_fast.py），因為「隨機買入順序 × 1,000 次」用 vbt 版要
     下限也是擋單門檻（現金 < 下限就不買），取 100 萬／份數會讓後期現金不足 1.5 萬就停買，
     行為與文章（七）的數字不同。
 
-**排序**：低價／流動性（5 日均量×收盤）／高價 三種固定排序 ＋ 隨機排序 × N 次
+**排序**：低價／成交金額（5 日均量×收盤）／高價 三種固定排序 ＋ 隨機排序 × N 次
 （每次每天每檔抽一個 [0,1) 均勻亂數當優先序，種子 SEED0＋第 k 次；亂數無平手）。
 隨機的代表列＝**N 次裡「最終權益」中位數那一次的完整列**——文章（六）（七）表註
 「隨機列＝1000 次隨機順序取中位那次」、07-31 reference「代表列＝1000 次中最終權益中位那次
@@ -65,7 +65,7 @@ OUT = common.result_dir("kd_strategy", "kd_multi")
 # 單股蒙地卡羅表（_04_analysis/kd/kd_montecarlo.py 的輸出）。回測層不往上 import 分析層，
 # 所以這裡自己拼路徑；兩邊都用 result_dir("kd_strategy", "kd_mc")/kd_montecarlo.csv。
 MC_CSV = os.path.join(common.result_dir("kd_strategy", "kd_mc"), "kd_montecarlo.csv")
-ORDERS = ("低價", "流動性", "高價")
+ORDERS = ("低價", "成交金額", "高價")
 
 _DATA = None
 
@@ -113,11 +113,11 @@ def _init(folder: str, limit):
 
 
 def prio_panels(data: dict, close: pd.DataFrame) -> dict:
-    """低價／流動性／高價三種優先序，直接由原始資料對齊出來，不必重掃訊號。"""
+    """低價／成交金額／高價三種優先序，直接由原始資料對齊出來，不必重掃訊號。"""
     turn = pd.DataFrame({sid: data[sid]["volume"].rolling(5).mean() * data[sid]["close"]
                          for sid in close.columns}).reindex(index=close.index, columns=close.columns)
     c = close.to_numpy(np.float64)
-    return {"低價": -c, "流動性": turn.to_numpy(np.float64), "高價": c}
+    return {"低價": -c, "成交金額": turn.to_numpy(np.float64), "高價": c}
 
 
 EXACT = "_精確"    # 未四捨五入欄的後綴（文章出表要從精確值一次進位，見 exact_stats）

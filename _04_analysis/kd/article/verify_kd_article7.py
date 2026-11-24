@@ -38,7 +38,7 @@ def ordering_claims(ck: Checker, text: str, pct: pd.DataFrame):
     c = pick(pct, "創120日新高", "低價"), pick(pct, "創120日新高", "隨機")
     ck.contains(text, f"創 120 低價總獲利 {fmt(c[0]['總獲利(萬)'], 0)} 萬／獲利因子 {fmt(c[0]['獲利因子'], 2)}，"
                       f"遠高於隨機的 {fmt(c[1]['總獲利(萬)'], 0)} 萬／{fmt(c[1]['獲利因子'], 2)}", "創 120 例子")
-    for order in ("流動性", "高價"):
+    for order in ("成交金額", "高價"):
         lose = sum(pick(pct, n, order)["總獲利(萬)"] < pick(pct, n, "隨機")["總獲利(萬)"]
                    and pick(pct, n, order)["獲利因子"] < pick(pct, n, "隨機")["獲利因子"] for n in names)
         ck.check(lose == 6, f"{order}六種策略全部輸給隨機：{lose}/6")

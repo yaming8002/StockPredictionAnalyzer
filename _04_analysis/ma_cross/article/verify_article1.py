@@ -3,7 +3,7 @@
 驗〈均線交叉（一）：黃金交叉與死亡交叉〉（ma-cross-golden-cross）：兩張表每一格＋正文統計句。
 
   主表＝無門檻 baseline（result/ma_cross/baseline），10 欄，正值紅 pos／負值綠 neg。
-  流動性表＝5 日均量>1,000 張（result/ma_cross/liq1000），9 欄（無中位數）。
+  可成交表＝5 日均量>1,000 張（result/ma_cross/liq1000），9 欄（無中位數）。
   正文的每個數字、比較與計數都由逐筆交易重算，再確認文章裡真的出現那段字。
 
 執行（BLOG_DIR 指向 blog 專案根目錄）：
@@ -60,22 +60,22 @@ def verify_claims(ck: Checker, text: str) -> None:
     ck.check(len(x) == 1 and abs(x["sell_price"].iloc[0] / x["buy_price"].iloc[0] - 1) < 0.01,
              "找不到 5703.TWO 抱 469 天、幾乎打平的那筆")
     ck.phrase(text, "抱了 469 天、幾乎原地踏步")
-    # 加流動性門檻：筆數砍六到七成
+    # 加可成交門檻：筆數砍六到七成
     cut = {p: 1 - liq[p]["n"] / base[p]["n"] for p in PAIRS}
     ck.check(all(0.6 <= c < 0.75 for c in cut.values()),
-             f"流動性砍掉比例超出六到七成：{ {p: round(c, 3) for p, c in cut.items()} }")
+             f"可成交砍掉比例超出六到七成：{ {p: round(c, 3) for p, c in cut.items()} }")
     ck.phrase(text, f"50/200 從 {fmt(b['n'])} 筆掉到 {fmt(lq['n'])} 筆")
     ck.phrase(text, f"120/200 從 {fmt(base['120/200']['n'])} 筆掉到 {fmt(liq['120/200']['n'])} 筆")
     m6b, m6l = base["60/200"], liq["60/200"]
     ck.phrase(text, f"獲利因子從 {fmt(m6b['pf'], 2)} 降到 {fmt(m6l['pf'], 2)}、"
                     f"總獲利從 {fmt(m6b['tot'])} 萬掉到 {fmt(m6l['tot'])} 萬")
     pos = [p for p in PAIRS if liq[p]["ev"] > 0 and liq[p]["pf"] > 1 and liq[p]["tot"] > 0]
-    ck.check(len(pos) == 20, f"流動性版期望值／獲利因子／總獲利皆正的組數 {len(pos)}（文：大多仍是正的）")
-    ck.check(all(liq[p]["wr"] < 50 for p in PAIRS), "流動性版勝率有組 ≥ 五成（文：沒過半）")
+    ck.check(len(pos) == 20, f"可成交版期望值／獲利因子／總獲利皆正的組數 {len(pos)}（文：大多仍是正的）")
+    ck.check(all(liq[p]["wr"] < 50 for p in PAIRS), "可成交版勝率有組 ≥ 五成（文：沒過半）")
     in34 = sum(30 <= liq[p]["wr"] < 40 for p in PAIRS)
-    ck.check(in34 > 10, f"流動性版勝率落在三到四成的組數 {in34}（文：多落在三到四成）")
+    ck.check(in34 > 10, f"可成交版勝率落在三到四成的組數 {in34}（文：多落在三到四成）")
     in_pf = sum(1.2 <= round(liq[p]["pf"], 2) <= 2.0 for p in PAIRS)
-    ck.check(in_pf > 10, f"流動性版獲利因子 1.2～2.0 的組數 {in_pf}（文：多在 1.2～2.0）")
+    ck.check(in_pf > 10, f"可成交版獲利因子 1.2～2.0 的組數 {in_pf}（文：多在 1.2～2.0）")
     # 50/200 baseline 那一段
     ck.phrase(text, f"勝率 {fmt(b['wr'], 1)}%、平均賺 {fmt(b['aw'], 1)}% / 平均賠 {fmt(-b['al'], 1)}%、"
                     f"獲利因子 {fmt(b['pf'], 2)}、每筆期望值 {fmt(b['ev'], 0, sign=True)} 元、"
@@ -91,11 +91,11 @@ def verify_claims(ck: Checker, text: str) -> None:
         grp = [p for p in PAIRS if p.startswith(f"{s}/") and base[p]["tot"] > 0]
         low = min(grp, key=lambda p: tail_share("baseline", p))
         ck.check(low == f"{s}/200", f"短均 {s}：尾部集中度最低的是 {low}（文：長均線用 200 那群最不靠尾巴）")
-    # 散戶那段（流動性版 50/200）
+    # 散戶那段（可成交版 50/200）
     ck.phrase(text, f"每筆平均要抱 **{fmt(lq['hold'], 0)} 天（含假日）≈ 8 個月**")
-    ck.check(round(lq["hold"] / 30.44) == 8, "流動性版 50/200 持有天換算不是約 8 個月")
-    ck.phrase(text, f"**中位數是 {fmt(lq['med'], 1)}%**——甚至比沒篩流動性時的 {fmt(b['med'], 1)}% 還更深")
-    ck.check(lq["med"] < b["med"], "流動性版中位數沒有比 baseline 更深")
+    ck.check(round(lq["hold"] / 30.44) == 8, "可成交版 50/200 持有天換算不是約 8 個月")
+    ck.phrase(text, f"**中位數是 {fmt(lq['med'], 1)}%**——甚至比沒篩可成交門檻時的 {fmt(b['med'], 1)}% 還更深")
+    ck.check(lq["med"] < b["med"], "可成交版中位數沒有比 baseline 更深")
     # 2617.TW 那筆：baseline 50/200
     t2 = t[(t["stock_id"] == "2617.TW") & (t["buy_date"] == "2020-09-03")]
     if ck.check(len(t2) == 1, "找不到 2617.TW 2020-09-03 那筆"):
@@ -126,9 +126,9 @@ def main() -> int:
     tb = tables(section(text, "## 回測結果（21 組）", "## 客觀觀察"))
     ck.check(len(tb) == 1, f"主表段應有 1 張表，實際 {len(tb)}")
     verify_value_table(ck, tb[0], "baseline", "主表", color="sign")
-    tl = tables(section(text, "## 補一道現實濾網：流動性", "## 重點整理"))
-    ck.check(len(tl) == 1, f"流動性段應有 1 張表，實際 {len(tl)}")
-    verify_value_table(ck, tl[0], "liq1000", "流動性表", color="sign")
+    tl = tables(section(text, "## 補一道現實濾網：可成交", "## 重點整理"))
+    ck.check(len(tl) == 1, f"可成交段應有 1 張表，實際 {len(tl)}")
+    verify_value_table(ck, tl[0], "liq1000", "可成交表", color="sign")
     verify_claims(ck, text)
     return ck.done()
 

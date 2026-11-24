@@ -5,7 +5,7 @@ MACD 系列結論的回測段：五組交易策略 × 兩種投法 × 三種排�
 回撤在分析段 `_04_analysis/macd/macd_multi_conclusion.py`。拆兩段是為了分層：
 _03 只做多股回測、_04 只做分析。
 
-**三種買入排序（低價／高價／流動性）全跑**：結論篇從（十一）（十二）全期總獲利的前幾名挑出
+**三種買入排序（低價／高價／成交金額）全跑**：結論篇從（十一）（十二）全期總獲利的前幾名挑出
 要跟 0050 比的組合，前幾名不只有低價排序，所以 30 組都備妥 2015–2025 的權益，由分析段挑。
 排序面板沿用多股 driver 的 `prio_panels`（同一支，口徑與（十一）（十二）一致）。
 
@@ -52,7 +52,7 @@ EQUITY_FILE = os.path.join(OUT, "conclusion_equity.parquet")
 RUNS_FILE = os.path.join(OUT, "conclusion_runs.csv")
 
 
-ORDERINGS = ("低價", "高價", "流動性")
+ORDERINGS = ("低價", "高價", "成交金額")
 
 
 def equity_key(label: str, method: str, kind: str) -> str:

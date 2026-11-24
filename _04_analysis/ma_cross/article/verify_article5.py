@@ -76,7 +76,7 @@ def verify_claims(ck: Checker, text: str, df) -> None:
     ck.phrase(text, f"四種排序的總獲利最多只差 {fmt(o['spread'][big])} 萬（{big}）")
     ck.phrase(text, f"其中**低價優先在 {len(top['低價'])} 組最高**")
     ck.phrase(text, f"（{' 與 '.join(top['隨機'])} 是隨機最高、{' 與 '.join(top['高價'])} 是高價最高、"
-                    f"{' 與 '.join(top['流動性'])} 是流動性最高）")
+                    f"{' 與 '.join(top['成交金額'])} 是成交金額優先最高）")
     sh = o["shown"]["50/60"]
     ck.phrase(text, f"50/60：低價 {fmt(sh['低價'])} 萬 vs 高價 {fmt(sh['高價'])} 萬")
     ck.check(all(v < 0 for v in o["tot"]["5/10"].values()), "5/10 四排序不是全部虧損")

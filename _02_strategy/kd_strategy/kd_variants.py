@@ -15,7 +15,7 @@ KD 變體參數化（給掃描 driver 用）
              其餘名稱是疊在上面的濾網；名稱若屬於 ENTRY_BASES（純檔位、連續確認），
              就取代黃金交叉當基礎（一個 ENTRY 至多一個基礎）。() ＝ 純黃金交叉。
   EXIT       出場條件名稱（字串或 tuple，tuple 內任一觸發即出＝OR）。
-  LIQUIDITY  進場流動性門檻：'none' 不加／'lot' 5 日均量 > 1000 張（#2a）／
+  LIQUIDITY  進場可成交門檻：'none' 不加／'lot' 5 日均量 > 1000 張（#2a）／
              'amt' 成交金額 5日均量×股價 > TURNOVER（#2b，預設 1,000 萬；舊 3,000 萬版另設 TURNOVER）。
              門檻只 gate 進場，出場不加（與策略檔、多股檔同口徑）。
   OVERSOLD / OVERBOUGHT  超賣／超買門檻（預設 20/80）；30/70、10/90 門檻變形用。
@@ -121,7 +121,7 @@ def _both_turn(cond: pd.Series) -> pd.Series:
 ENTRY_BASES = {
     # 連續確認（2026-07-20 reference／文章 kd-cross-entry-filters「隔日 K 仍>D」）：
     # 黃金交叉的「隔天」K 仍在 D 之上才算進場判定日。⚠️ 定義待確認（原 driver 遺失）：
-    # 照字面寫成「昨日黃金交叉 & 今日 K>D」；流動性門檻看判定日（今天）。
+    # 照字面寫成「昨日黃金交叉 & 今日 K>D」；可成交門檻看判定日（今天）。
     "confirm2": lambda s, df: df["golden"].shift(1, fill_value=False) & (df["k"] > df["d"]),
     # 純檔位（2026-07-20 reference §2，不判斷交叉）：K 由下往上穿過超賣線（K↑20）就買。
     "zone_k_up20": lambda s, df: (df["k"] > s.OVERSOLD) & (df["k"].shift(1) <= s.OVERSOLD),
@@ -346,7 +346,7 @@ def _as_tuple(x) -> tuple:
 
 
 class KdVariant(SingleKDStrategy):
-    """進場 × 出場 × 流動性 × 門檻 參數化的 KD 策略；條件式與策略檔註解切換行同一份。"""
+    """進場 × 出場 × 可成交 × 門檻 參數化的 KD 策略；條件式與策略檔註解切換行同一份。"""
 
     ENTRY = ()                  # () ＝ 純黃金交叉
     EXIT = "death"
@@ -378,7 +378,7 @@ class KdVariant(SingleKDStrategy):
         elif liq == "amt":
             signal = signal & (df["turnover"] > self.TURNOVER)       # 策略檔 #2b
         elif liq != "none":
-            raise ValueError(f"未知流動性門檻 {liq}")
+            raise ValueError(f"未知可成交門檻 {liq}")
         return signal.fillna(False).astype(bool)
 
     def sell_signal(self, df: pd.DataFrame) -> pd.Series:

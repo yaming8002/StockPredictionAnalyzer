@@ -2,7 +2,7 @@
 多股雙底 × 兩種投法 × 四種買入排序（〈雙底（九）〉〈雙底（十）〉）
 ====================================================================
 〈雙底（八）〉蒙地卡羅那五組（全是 ZigZag 9%、可成交）搬進「單一本金、多檔共用資金」的組合回測，
-每組跑兩種投法 × 四種買入排序（低價／高價／流動性／隨機 1,000 次取中位＋P5/P95）。
+每組跑兩種投法 × 四種買入排序（低價／高價／成交金額／隨機 1,000 次取中位＋P5/P95）。
 引擎＝fast_multi_db（出場依實際持倉判定，原因見該檔檔頭）；對帳＝verify_db_multi.py。
 
 **份數（同 MACD 多股 driver，兩投法公式不同、絕不共用；floor=0.80）**：
@@ -49,7 +49,7 @@ PCT_MIN_INVEST = 10_000.0
 SEED0 = 20261113
 OUT = common.result_dir("double_bottom_strategy", "double_bottom_multi")
 PATH = os.path.join(OUT, "db_multi_result.csv")
-ORDERS = ("低價", "高價", "流動性", "隨機")
+ORDERS = ("低價", "高價", "成交金額", "隨機")
 
 # (顯示名, 門檻, 進場, 出場, S)；S＝〈雙底（八）〉蒙地卡羅表的最大連敗 P95
 PICKS = [
@@ -87,7 +87,7 @@ def load_all(limit=None) -> dict:
 
 def prio_prev(data: dict, close_panel: pd.DataFrame) -> dict:
     """
-    低價／高價／流動性三種優先序，依據＝判定日（成交日前一根，個股自己的日曆）的收盤與 5 日均量×收盤。
+    低價／高價／成交金額三種優先序，依據＝判定日（成交日前一根，個股自己的日曆）的收盤與 5 日均量×收盤。
     先在個股日曆上 shift(1) 再對齊聯集日曆，與進場面板的判定日 → 成交日位移同一套。
     """
     idx, cols = close_panel.index, close_panel.columns
@@ -95,7 +95,7 @@ def prio_prev(data: dict, close_panel: pd.DataFrame) -> dict:
         index=idx, columns=cols).to_numpy(np.float64)
     c = align(lambda df: df["close"])
     turn = align(lambda df: df["volume"].rolling(5).mean() * df["close"])
-    return {"低價": -c, "高價": c, "流動性": turn}
+    return {"低價": -c, "高價": c, "成交金額": turn}
 
 
 def row_of(res: dict, **labels) -> dict:

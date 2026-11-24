@@ -41,7 +41,7 @@ class MultiKD(VbtMultiStrategy):
     """多股 KD：進場 self.ENTRY（＋黃金交叉＋可成交門檻），出場高檔死叉；隔日開盤成交。"""
 
     ENTRY = "breakout250"
-    PRIO = "low_price"          # 買入優先序：low_price(低價) / turnover(流動性) / high_price(高價)
+    PRIO = "low_price"          # 買入優先序：low_price(低價) / turnover(成交金額) / high_price(高價)
 
     def add_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         if "k" not in df.columns or "d" not in df.columns:
@@ -92,7 +92,7 @@ class MultiKD(VbtMultiStrategy):
         return df["open"]                                        # 隔日開盤價成交
 
     def priority(self, df: pd.DataFrame, stock_id: str) -> pd.Series:
-        # 買入優先序（擋單多時決定先買誰）；三選一：低價 / 流動性 / 高價
+        # 買入優先序（擋單多時決定先買誰）；三選一：低價 / 成交金額 / 高價
         if self.PRIO == "turnover":
             return self.prio_by_turnover(df)
         if self.PRIO == "high_price":

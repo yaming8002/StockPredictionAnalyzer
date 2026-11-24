@@ -3,7 +3,7 @@
 產生〈雙底（一）〉兩張結果表的 HTML 列，並另存文章數字用的精確值。
 
 資料來源＝SPA 單股回測輸出（回測程式在 `_02_strategy/double_bottom_strategy/`，這支只負責排版）：
-  result/single_double_bottom/p<門檻>_raw/      無流動性門檻（表一）
+  result/single_double_bottom/p<門檻>_raw/      無可成交門檻（表一）
   result/single_double_bottom/p<門檻>_liq1000/  成交金額 > 1,000 萬（表二）
 每組讀逐筆 trades CSV 重算規格 9 欄的精確值（fast_multi.exact_stats，口徑同 summarize_trades：
 排除淨損益 0、金額類用淨損益、報酬率類用毛報酬），再一次 half-up 進位；diag.json 給出場原因分布。
@@ -91,7 +91,7 @@ def table_rows(df: pd.DataFrame, liq: bool) -> str:
 def main() -> int:
     df = stats()
     df.to_csv(STATS_FILE, index=False, encoding="utf-8-sig")
-    print("=== 表一：無流動性門檻 ===")
+    print("=== 表一：無可成交門檻 ===")
     print(table_rows(df, False))
     print("\n=== 表二：成交金額 > 1,000 萬 ===")
     print(table_rows(df, True))

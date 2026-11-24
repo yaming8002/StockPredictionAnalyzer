@@ -3,7 +3,7 @@
 產生（十一）（十二）兩篇的結果表 HTML 列。
 
 資料來源＝SPA 的多股回測輸出（**回測程式全部在 SPA / GitHub，這支只負責排版**）：
-  _02_strategy/macd_strategy/result/macd_multi/macd_multi_result.csv    低價／高價／流動性
+  _02_strategy/macd_strategy/result/macd_multi/macd_multi_result.csv    低價／高價／成交金額
   _02_strategy/macd_strategy/result/macd_multi/macd_multi_random.csv    隨機（1,000 次取中位）
 
 排法比照 KD 系列多股兩篇：**策略區塊依「低價」總獲利高到低排、區塊內依總獲利排**。

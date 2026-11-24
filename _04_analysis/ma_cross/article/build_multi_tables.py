@@ -3,7 +3,7 @@
 產生均線交叉（五）（六）多股兩篇與（七）結論篇的表格 HTML 列（只排版，不跑回測）。
 
 資料＝_03_multi_strategy/ma_cross/ma_cross_multi_driver.py --task angle_adx 的輸出
-（result/angle_adx/orderings.csv＝流動性／低價／高價三種固定排序；random_dist.csv＝隨機 1,000 次，
+（result/angle_adx/orderings.csv＝成交金額／低價／高價三種固定排序；random_dist.csv＝隨機 1,000 次，
 代表列是「最終權益中位數那一次」，另附總獲利的 P5／中位／P95）。
 
   --mode 定額 → （五）：份數表、分批對照表、排序對照表、附錄四張完整表
@@ -13,7 +13,7 @@
 多股兩篇沿用原文的 ASCII 減號（-）；（七）沿用原文的全形減號（−）。
 上色規則：
   分批對照表：本金<80% 大於 0 標 risk；中位差（公式−等分，用顯示值相減）正＝up、負＝down。
-  排序對照表：流動性／低價／高價以同列隨機為基準，比「顯示值」——顯示一樣不上色，
+  排序對照表：成交金額／低價／高價以同列隨機為基準，比「顯示值」——顯示一樣不上色，
              高於＝up、低於＝down（讀者看到兩格數字相同卻有顏色會困惑）。
 
 執行：
@@ -32,7 +32,7 @@ from article_common import PAIRS, fmt, half_up, mc, mrow, multi  # noqa: E402
 
 INIT_CASH = 1_000_000.0
 FLOOR = 0.80
-ORDERS = ["流動性", "低價", "高價", "隨機"]
+ORDERS = ["成交金額", "低價", "高價", "隨機"]
 
 
 def afmt(v, nd: int = 0, comma: bool = True, sign: bool = False) -> str:
@@ -76,7 +76,7 @@ def units_rows(df, mode: str) -> str:
     s = mc()["最大連敗_P95"]
     out = []
     for p in PAIRS:
-        r = mrow(df, p, sizing_names(mode)[0], "流動性")
+        r = mrow(df, p, sizing_names(mode)[0], "成交金額")
         out.append(f"<tr><td>{p}</td><td>{int(s[p])}</td><td>{int(r['份數'])}</td>"
                    f"<td>{afmt(INIT_CASH / r['份數'])}</td></tr>")
     return "".join(out)

@@ -2,7 +2,7 @@
 KD 交叉：文章與 reference 全變體掃描（單股回測段）
 ==================================================
 KD 系列文章（blog/site/content/posts/kd-cross-*.md）與 reference（blog/reference/single_kd/）的
-對照表合計上百組進場 × 出場 × 流動性組合，原本是一批 scratchpad driver 跑的、已遺失。這裡把
+對照表合計上百組進場 × 出場 × 可成交組合，原本是一批 scratchpad driver 跑的、已遺失。這裡把
 它們全部登錄成 VARIANTS（條件式見 kd_variants.py），以標準區間 2002～2025、2,258 檔重產。
 
 做法比照 ma_strategy/single_ma_sweep.py：每檔讀一次全史、`add_columns` 只算一次，所有變體共用
@@ -11,8 +11,8 @@ KD 系列文章（blog/site/content/posts/kd-cross-*.md）與 reference（blog/r
 只抱自己那組變體的逐筆交易，記憶體不會隨變體數疊加；代價是每檔的讀檔＋備欄會做 workers 次
 （相對於上百次 vbt 回測可忽略）。
 
-變體命名：<流動性>__<進場>__<出場>[__z<超賣>_<超買>]
-  流動性 raw（無門檻）／lot（1000 張）／amt（成交金額 1,000 萬）／amt30m（舊 3,000 萬版）
+變體命名：<可成交>__<進場>__<出場>[__z<超賣>_<超買>]
+  可成交 raw（無門檻）／lot（1000 張）／amt（成交金額 1,000 萬）／amt30m（舊 3,000 萬版）
   進場   golden＝純黃金交叉；其餘為疊在黃金交叉上的濾網（多個以 + 串），純檔位等基礎見 kd_variants.ENTRY_BASES
   出場   多個以 -or- 串（任一觸發即出）
   例：amt__breakout60__high_death、amt__golden__k_down50-or-k_down80、amt__low_zone__high_death__z30_70
@@ -43,7 +43,7 @@ from _02_strategy.kd_strategy.kd_variants import KdVariant  # noqa: E402
 from _02_strategy.kd_strategy.single_kd_strategy import RESULT_DIR  # noqa: E402
 
 LABEL = "single_kd"
-# 流動性前綴 → (LIQUIDITY, TURNOVER)
+# 可成交前綴 → (LIQUIDITY, TURNOVER)
 _LIQ = {"raw": ("none", None), "lot": ("lot", None),
         "amt": ("amt", 10_000_000), "amt30m": ("amt", 30_000_000)}
 
@@ -67,7 +67,7 @@ def _set(key: str, names: list) -> None:
     SETS[key] = list(dict.fromkeys(names))
 
 
-# ── 2026-07-05 KD 交叉 baseline vs opt1 × 兩種流動性（舊金額門檻 3,000 萬）＋ 文章（一）──
+# ── 2026-07-05 KD 交叉 baseline vs opt1 × 兩種可成交（舊金額門檻 3,000 萬）＋ 文章（一）──
 _set("d0705", [
     _v("raw"), _v("lot"), _v("amt30m"),                                   # baseline／+1000張／+3000萬
     _v("raw", "low_zone", "high_death"),                                  # opt1

@@ -79,7 +79,7 @@ def variant_trades(data: dict, base: str, filt: str, exit_name: str,
 
 def make_variant(base: str, filt: str, exit_name: str, exit_mode: str,
                  liquidity: bool = True) -> MacdVariant:
-    """依四個維度＋流動性開關組出一個 MacdVariant（掃描 driver 與診斷共用同一份設定）。"""
+    """依四個維度＋可成交開關組出一個 MacdVariant（掃描 driver 與診斷共用同一份設定）。"""
     v = MacdVariant()
     v.BASE, v.FILTER, v.EXIT, v.EXIT_MODE, v.LIQUIDITY = (
         base, filt, exit_name, exit_mode, liquidity)

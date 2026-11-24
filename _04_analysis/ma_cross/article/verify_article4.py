@@ -24,7 +24,7 @@ from article_common import (MC_VARIANT, PAIRS, TRADING_DAYS, Checker, all_metric
                             tables)
 
 SLUG = "ma-cross-single-eval"
-# 單股 sweep 的 6 種配置（皆含 1000 張流動性），見 blog/drafts/_handoff_ma_cross_articles.md §十六
+# 單股 sweep 的 6 種配置（皆含 1000 張可成交），見 blog/drafts/_handoff_ma_cross_articles.md §十六
 SIX = ["liq1000", "strongk_liq1000", "angle20_liq1000", "vol_adx25_liq1000",
        "strongk_adx25_liq1000", "angle20_adx25_liq1000"]
 

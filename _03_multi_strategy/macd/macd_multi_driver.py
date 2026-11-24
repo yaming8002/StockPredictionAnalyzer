@@ -11,7 +11,7 @@
 S 取自 MACD 系列第十篇蒙地卡羅那張表的已發佈數字（見下方 S_BY_STRATEGY），
 不在這裡重跑一輪——重跑的隨機種子不同會與文章對不上，份數跟著飄。
 
-**四種買入排序**（同一天多個買訊、現金不夠時先買誰）：低價／高價／流動性／隨機。
+**四種買入排序**（同一天多個買訊、現金不夠時先買誰）：低價／高價／成交金額／隨機。
 這支只出前三種；隨機那一格全市場要重跑 1,000 次，走多進程的 `macd_multi_random.py`。
 隨機＝隨機化買入順序、重複多次取中位＋5/95，當「亂買」基準線，用來檢驗低價優先
 是不是真的有優勢。訊號與價格面板只建一次（`build_panel`），之後只重跑下單模擬
@@ -84,13 +84,13 @@ def load_all(limit=None):
 
 
 def prio_panels(data, close_panel):
-    """低價／高價／流動性三種優先序，直接由原始資料對齊出來，不必重掃訊號。"""
+    """低價／高價／成交金額三種優先序，直接由原始資料對齊出來，不必重掃訊號。"""
     idx, cols = close_panel.index, close_panel.columns
     turn = pd.DataFrame(
         {sid: data[sid]["volume"].rolling(5).mean() * data[sid]["close"]
          for sid in cols}).reindex(index=idx, columns=cols)
     c = close_panel.to_numpy(np.float64)
-    return {"低價": -c, "高價": c, "流動性": turn.to_numpy(np.float64)}
+    return {"低價": -c, "高價": c, "成交金額": turn.to_numpy(np.float64)}
 
 
 def row_of(label, mname, kind, n_units, res):
@@ -130,7 +130,7 @@ def main():
                 ("比例", "percent_floor",
                  {"invest_ratio": 1.0 / n_pct, "min_invest": PCT_MIN_INVEST}, n_pct)):
             inst = MultiMACD(initial_cash=INIT_CASH, sizing_mode=mode, **kwargs)
-            for kind in ("低價", "高價", "流動性"):
+            for kind in ("低價", "高價", "成交金額"):
                 tr = time.time()
                 res = run_panel_fast(inst, panel, prios[kind], want_equity=False)
                 r = row_of(label, mname, kind, n_units, res)

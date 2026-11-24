@@ -35,7 +35,7 @@ MACD 有三種「本質不同」的進場邏輯，各自獨立初探（每一種
   每個變體實際跑出什麼（交易次數、勝率、持有天數、獲利因子、總獲利與完整口徑）都在文章裡；
   系列頁會隨新文章自動更新。本檔只放「怎麼算」，不放結論。
 
-⚠️ 口徑提醒：有沒有開流動性門檻（見 buy_signal 最後一行）會讓數字差很多，
+⚠️ 口徑提醒：有沒有開可成交門檻（見 buy_signal 最後一行）會讓數字差很多，
    比較不同變體時務必確認兩邊的門檻設定一致。
 
 執行（全市場，掃整個資料夾、彙總；結果寫策略同目錄 ./result）：
@@ -73,7 +73,7 @@ MACD_SHORT = 12     # 短 EMA
 MACD_LONG = 26      # 長 EMA
 MACD_SIGNAL = 9     # 訊號線 EMA
 
-# 流動性門檻（優化·流動性）— 成交金額 = 5日均量(股) × 股價 > 1,000 萬。
+# 可成交門檻（優化·可成交）— 成交金額 = 5日均量(股) × 股價 > 1,000 萬。
 # 用個股實際股價換算真實可入場金額，高價低量股不誤殺（對齊 single_kd、跨策略共用口徑）。
 TURNOVER_MIN = 10_000_000
 
@@ -192,7 +192,7 @@ class SingleMacdStrategy(VbtSingleStrategy):
     MACD 策略。只描述「判定日」訊號，「隔日開盤成交 + 台股費用 / 稅 / tick」全由基底處理。
 
     以「註解切換」管理（見 buy_signal / sell_signal / EXIT_RULE）：三個基礎方案（交叉／零軸／背離）
-    互斥擇一，優化濾網（趨勢過濾／量能／流動性…）疊在選定基礎上、一次一條；--variant 只決定輸出資料夾。
+    互斥擇一，優化濾網（趨勢過濾／量能／可成交…）疊在選定基礎上、一次一條；--variant 只決定輸出資料夾。
     """
 
     # ── 出場優化·路徑相依（一次一條；維持 EXIT_NONE＝不啟用，走 sell_signal 的向量化路徑）──
@@ -230,7 +230,7 @@ class SingleMacdStrategy(VbtSingleStrategy):
         df["death"] = (macd < sig) & (macd.shift(1) >= sig.shift(1))
         # 零軸之上（DIF、訊號線都 > 0）— 進場濾網用
         df["above_zero"] = (macd > 0) & (sig > 0)
-        # 5 日均量（股數）→ 成交金額 = 5日均量 × 收盤價（用個股實際股價）— 流動性門檻用
+        # 5 日均量（股數）→ 成交金額 = 5日均量 × 收盤價（用個股實際股價）— 可成交門檻用
         df["vol_ma5"] = df["volume"].rolling(5).mean()
         df["turnover"] = df["vol_ma5"] * close
         # CMF（Chaikin Money Flow，20 日）— 優化·量能用；缺欄才補算。
@@ -317,9 +317,9 @@ class SingleMacdStrategy(VbtSingleStrategy):
         # signal = signal & df["gap_up"]                                 # ⑨跳空（開盤>昨日最高）
         # signal = signal & df["above_zero"]                             # （零軸之上：與基礎 B 概念重疊，已停用）
 
-        # ── 流動性口徑（可成交門檻，只 gate 進場）──
+        # ── 可成交口徑（可成交門檻，只 gate 進場）──
         # 2026-08-25 之後的所有輪次一律開這一行；關掉＝無門檻口徑，與後續數字不可並列。
-        # signal = signal & (df["turnover"] > TURNOVER_MIN)     # 優化：流動性（成交金額 > 1,000 萬）
+        # signal = signal & (df["turnover"] > TURNOVER_MIN)     # 優化：可成交（成交金額 > 1,000 萬）
         return signal.fillna(False).astype(bool)
 
     def sell_signal(self, df: pd.DataFrame) -> pd.Series:

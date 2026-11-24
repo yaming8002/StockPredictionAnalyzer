@@ -6,7 +6,7 @@
 的 baseline（通道天數取同一份 SYSTEMS 對照表），執行時序一致：**收盤判定 → 隔日開盤成交**。
 
 與單股 baseline 的差異只有一條：進場另加可成交門檻（成交金額 5日均量×股價 > 1,000 萬），
-與 KD／MACD 多股同口徑——共用資金下真的要下單，低流動性小股買不進來。
+與 KD／MACD 多股同口徑——共用資金下真的要下單，成交清淡小股買不進來。
 
 本檔不做原版的 N 定倉與 ½N 加碼（每檔同時只抱一個部位），倉位由
 VbtMultiStrategy 的 sizing_mode / invest_ratio / min_invest 決定（見 driver 的份數表）。

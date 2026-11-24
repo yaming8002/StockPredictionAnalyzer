@@ -9,7 +9,7 @@
 份數（S＝單股蒙地卡羅最大連敗 P95，讀 _04_analysis/candidates/candidates_montecarlo.py 的輸出）：
   固定金額投入：份數＝round(S/0.2)，每筆＝100 萬÷份數，不複利；
   固定比例投入：份數＝round(1/(1−0.8^(1/S)))，每筆＝已實現權益÷份數（下限 1 萬）。
-三種買入排序（同日現金不夠時先買誰）：低價／高價／流動性（排序面板沿用 MACD 多股 driver 的 prio_panels）。
+三種買入排序（同日現金不夠時先買誰）：低價／高價／成交金額（排序面板沿用 MACD 多股 driver 的 prio_panels）。
 隨機排序 ×1000 這一輪不跑。
 
 **引擎：vbt `from_order_func`**（`VbtMultiStrategy.run_panel`；雙底用 multi_double_bottom 的帶狀態下單函式，
@@ -42,7 +42,7 @@ from _03_multi_strategy.macd.macd_multi_driver import prio_panels  # noqa: E402
 INIT_CASH = 1_000_000.0
 PCT_MIN_INVEST = 10_000.0
 WIN_START = "2015-01-01"          # 必須等於 0050 對照起點（分析段會檢查）
-ORDERINGS = ("低價", "高價", "流動性")
+ORDERINGS = ("低價", "高價", "成交金額")
 OUT = common.result_dir("double_bottom_strategy", "candidates_multi")
 MC_FILE = os.path.join(OUT, "candidates_montecarlo.csv")
 RESULT_FILE = os.path.join(OUT, "candidates_multi_result.csv")

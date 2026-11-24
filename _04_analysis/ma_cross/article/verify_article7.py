@@ -92,8 +92,8 @@ def verify_claims(ck: Checker, text: str, b: dict, ends: dict) -> None:
     ck.check(20 <= min(wr) and max(wr) <= 40.05, f"baseline 勝率範圍 {min(wr):.1f}～{max(wr):.1f}（文：二到四成）")
     b5, l5 = base["50/200"], liq["50/200"]
     ck.phrase(text, f"**不加任何濾網，24 年有 {fmt(b5['n'])} 筆**")
-    ck.phrase(text, f"**單單加一道流動性門檻，就從 {fmt(b5['n'])} 砍到 {fmt(l5['n'])} 筆（少了約六成）**")
-    ck.check(0.55 <= 1 - l5["n"] / b5["n"] < 0.65, "流動性砍掉比例不是約六成")
+    ck.phrase(text, f"**單單加一道可成交門檻，就從 {fmt(b5['n'])} 砍到 {fmt(l5['n'])} 筆（少了約六成）**")
+    ck.check(0.55 <= 1 - l5["n"] / b5["n"] < 0.65, "可成交砍掉比例不是約六成")
     n_full = metrics(MC_VARIANT, "50/200")["n"]
     ck.check(500 <= n_full < 600, f"完整濾網 50/200 筆數 {n_full}（文：五百多筆）")
     ck.phrase(text, f"**勝率幾乎沒變（{fmt(b5['wr'], 1)}%→{fmt(l5['wr'], 1)}%）**")

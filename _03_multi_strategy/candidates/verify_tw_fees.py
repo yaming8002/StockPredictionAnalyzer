@@ -1,7 +1,7 @@
 """
 對帳：vbt 多股「台股實際費稅」模式（multi_double_bottom.simulate_state_exit, fees="tw"）
 ==================================================================================
-三道檢查（全市場、比例投入、低價／高價／流動性三種排序）：
+三道檢查（全市場、比例投入、低價／高價／成交金額三種排序）：
   1. 海龜系統 2：vbt tw  vs  精簡引擎 fast_multi.run_panel_fast(fees="tw")——逐筆（股票、買賣日、買賣價、股數）
      與逐日權益都要一致（兩邊是獨立實作的同一套台股費稅規則）。
   2. 海龜系統 2：simulate_state_exit(fees="rate")  vs  基底 VbtMultiStrategy.run_panel——逐筆一致，

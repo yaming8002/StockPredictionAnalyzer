@@ -45,6 +45,18 @@ checkpoint 續傳（中斷後接著跑）、失敗重試、失敗清單、進度
 python download_full_history.py
 ```
 
+**官方篇** `official_download.py`／`official_repair.py` — yfinance 的台股歷史有部分股票不完整
+（整段缺漏、沒成交卻有價格、長期沒成交），改向證交所／櫃買中心的個股日成交資料逐月查詢並修正。
+說明見[股價資料怎麼修](https://stockanalyzer.sailforthlab.dev/posts/2026/11/twse-official-stock-data/)。
+
+```bash
+# 單檔逐月下載（可續傳；上市股最早 2010-01、查詢間隔 3～3.5 秒）
+python official_download.py 2330.TW 2024-01 2024-03
+# 整批：找出有問題的股票 → 下載 → 修正（apply 寫到另一個資料夾，不覆蓋原資料）
+python official_repair.py download --data-dir <股價資料夾>
+python official_repair.py apply --data-dir <股價資料夾> --out-dir <輸出資料夾>
+```
+
 ## 主題 3：資料優化 + 指標計算
 
 技術指標依「衡量什麼」分三組，各一個模組（對應指標系列文章三篇）。都是純函式：

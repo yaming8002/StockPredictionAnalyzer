@@ -4,7 +4,7 @@
 只負責跑多股回測、存逐日權益曲線與每組的成交統計；跟 0050 比、算資金倍數／年化／回撤在分析段
 `_04_analysis/double_bottom/db_multi_conclusion.py`。結構同 MACD 的 macd_conclusion_equity。
 
-**三種買入排序（低價／高價／流動性）全跑**：結論篇從〈雙底（九）〉〈雙底（十）〉全期總獲利的前幾名
+**三種買入排序（低價／高價／成交金額）全跑**：結論篇從〈雙底（九）〉〈雙底（十）〉全期總獲利的前幾名
 挑出要跟 0050 比的組合，前幾名不一定只有低價排序，所以 30 組都備妥 2015–2025 的權益，由分析段挑。
 引擎、份數、排序依據（判定日收盤，prio_prev）全部沿用多股 driver，口徑與（九）（十）一致。
 
@@ -39,7 +39,7 @@ from _03_multi_strategy.double_bottom.fast_multi_db import build_panel, run_pane
 WIN_START = "2015-01-01"
 EQUITY_FILE = os.path.join(OUT, "conclusion_equity.parquet")
 RUNS_FILE = os.path.join(OUT, "conclusion_runs.csv")
-ORDERINGS = ("低價", "高價", "流動性")
+ORDERINGS = ("低價", "高價", "成交金額")
 
 
 def equity_key(label: str, method: str, kind: str) -> str:

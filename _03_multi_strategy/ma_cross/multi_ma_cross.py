@@ -42,7 +42,7 @@ class MultiMACross(VbtMultiStrategy):
 
     SHORT_MA = 50
     LONG_MA = 200
-    MIN_VOL_ZHANG = 0       # >0：5 日均量 > N×1000 股 才進（流動性門檻，與單股 ma_cross 同口徑）
+    MIN_VOL_ZHANG = 0       # >0：5 日均量 > N×1000 股 才進（可成交門檻，與單股 ma_cross 同口徑）
     ANGLE_DEG = 0.0         # >0：黃金交叉「夾角(短均-長均)度數 > 此值」才進（濾網，與單股 ma_cross 同口徑）
     VOL_ADX = 0.0           # >0：交叉前一根 ADX(14) < 此值才進（盤整才進；與單股 ma_cross 同口徑）
     SLOPE_WIN = 5           # 夾角用的均線 N 日 %斜率視窗（與單股 SLOPE_WIN 一致）
@@ -90,7 +90,7 @@ class MultiMACross(VbtMultiStrategy):
         return df["open"]   # 隔日開盤價成交
 
     def priority(self, df: pd.DataFrame, stock_id: str) -> pd.Series:
-        # 預設以流動性(成交金額)為主排序；要做別的控制測試改寫這行即可
+        # 預設以成交金額為主排序；要做別的控制測試改寫這行即可
         return self.prio_by_turnover(df)
 
 
@@ -109,7 +109,7 @@ def main(argv) -> int:
     p.add_argument("--ratio", type=float, default=1.0 / 30.0)
     p.add_argument("--min-invest", type=float, default=10_000.0)
     p.add_argument("--cash", type=float, default=1_000_000.0)
-    p.add_argument("--min-vol-zhang", type=int, default=0, help="流動性:5日均量>N張(=N*1000股)才進(0=不濾)")
+    p.add_argument("--min-vol-zhang", type=int, default=0, help="可成交:5日均量>N張(=N*1000股)才進(0=不濾)")
     # 區間預設一律吃 base/vbt/common 的單一定義，不在此另立第二份（寫死會跟標準區間脫鉤）
     p.add_argument("--start", default=DEFAULT_START)
     p.add_argument("--end", default=DEFAULT_END)

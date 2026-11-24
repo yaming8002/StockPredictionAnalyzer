@@ -7,7 +7,7 @@ KD 交叉（一）用圖：KD 黃金/死亡交叉單股示範。
 - 圖下方標註資料來源；X 軸 categorical（不留週末空格）
 產兩張：
   kd_whipsaw_2330_TW   台積電某段 KD 反覆穿插、每次小賠（雜訊交叉）
-  kd_lowliq_9957_TWO   低流動性股，K 棒稀疏、幾乎不可成交
+  kd_lowliq_9957_TWO   成交清淡股，K 棒稀疏、幾乎不可成交
 """
 
 import os

@@ -1,7 +1,7 @@
 """
 單一均線突破：賣出日成交量檢查（分析段，不跑回測）
 ====================================================
-reference（blog/reference/single_ma/ opt11、opt12、summary、master）的「賣出流動性體檢」表：
+reference（blog/reference/single_ma/ opt11、opt12、summary、master）的「賣出成交量體檢」表：
 對某個變體的每一筆交易，取「賣出當天的成交量（張＝1000 股）」看分布——
 回測假設隔日開盤一定賣得掉，賣出日只有幾十張的交易在實盤其實出不了場。
 

@@ -67,11 +67,11 @@ def inventory_claims(rk: pd.DataFrame) -> list:
         c.append(f"{word}最好的一組排第 {best['全期名次']}（{wan(best['總獲利(萬)'])} 萬）")
 
     ma = top[top["交易策略"].str.contains("均線多頭")]
-    assert set(ma["排序"]) == {"低價", "流動性", "高價"}
-    vals = [ma[ma["排序"] == k]["總獲利(萬)"].iloc[0] for k in ("低價", "流動性", "高價")]
-    c.append("它在低價、流動性、高價三種排序下都進了前六（" + "、".join(wan(v) for v in vals) + " 萬）")
+    assert set(ma["排序"]) == {"低價", "成交金額", "高價"}
+    vals = [ma[ma["排序"] == k]["總獲利(萬)"].iloc[0] for k in ("低價", "成交金額", "高價")]
+    c.append("它在低價、成交金額、高價三種排序下都進了前六（" + "、".join(wan(v) for v in vals) + " 萬）")
     nf = rk[rk["交易策略"].str.contains("無濾網") & (rk["投法"] == "比例")].set_index("排序")
-    c.append(f"無濾網換成流動性只剩 {wan(nf.loc['流動性', '總獲利(萬)'])} 萬、換成高價只剩 {wan(nf.loc['高價', '總獲利(萬)'])} 萬")
+    c.append(f"無濾網換成成交金額優先只剩 {wan(nf.loc['成交金額', '總獲利(萬)'])} 萬、換成高價只剩 {wan(nf.loc['高價', '總獲利(萬)'])} 萬")
 
     first = top.iloc[0]
     higher = top[top["獲利因子"] > first["獲利因子"]]
