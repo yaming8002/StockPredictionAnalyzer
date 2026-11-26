@@ -29,6 +29,7 @@ if _root not in sys.path:
 
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _04_analysis.kd.article.kd_article_common import (MULTI, fmt, html_row, multi_cell,  # noqa: E402
                                                        with_exact)
 
@@ -43,12 +44,12 @@ NOTE = {"創250日新高": "創250新高", "創120日新高": "創120新高", "�
 # 份數表列序（沿用原文）
 UNIT_ORDER = ["創250日新高", "創120日新高", "創60日新高", "跳空", "低檔＋紅K", "底背離"]
 COLS = [("交易次數", 0), ("擋單", 0), ("勝率%", 1), ("平均持有天", 0), ("獲利平均%", 1),
-        ("虧損平均%", 1), ("中位數%", 2), ("期望值/筆", 0), ("獲利因子", 2), ("總獲利(萬)", 0)]
-PAINT = ("獲利因子", "總獲利(萬)")
+        ("虧損平均%", 1), ("中位數%", 2), ("期望值", 0), ("獲利因子(PF)", 2), ("總獲利(萬)", 0)]
+PAINT = ("獲利因子(PF)", "總獲利(萬)")
 
 
 def load_multi(mode: str) -> pd.DataFrame:
-    df = with_exact(pd.read_csv(os.path.join(MULTI, "kd_multi_result.csv"), encoding="utf-8-sig"))
+    df = with_exact(common.read_result_csv(os.path.join(MULTI, "kd_multi_result.csv"), encoding="utf-8-sig"))
     return df[df["投法"] == mode].copy()
 
 
@@ -63,7 +64,7 @@ def block_order(df: pd.DataFrame) -> list:
 
 
 def units_rows(mode: str) -> list:
-    u = pd.read_csv(os.path.join(MULTI, "units.csv"), encoding="utf-8-sig").set_index("交易策略")
+    u = common.read_result_csv(os.path.join(MULTI, "units.csv"), encoding="utf-8-sig").set_index("交易策略")
     rows = []
     for name in UNIT_ORDER:
         r = u.loc[name]
@@ -112,7 +113,7 @@ def compare_rows() -> list:
         for i, (lbl, r) in enumerate((("固定金額", f), ("固定比例", p))):
             row = [("", f"<b>{SHORT[name]}</b>" if i == 0 else ""), ("", lbl),
                    ("", val(r, "交易次數", 0)), ("", val(r, "擋單", 0))]
-            for col, nd in (("獲利因子", 2), ("總獲利(萬)", 0)):
+            for col, nd in (("獲利因子(PF)", 2), ("總獲利(萬)", 0)):
                 cls = "" if i == 0 else ("up" if p[col] > f[col] else "down")
                 row.append((cls, val(r, col, nd)))
             out.append(row)
@@ -124,7 +125,7 @@ CONC_EXTRA = [("資金倍數", 2), ("年化報酬率%", 2), ("最大回撤%", 1)
 
 def read_conc(name: str) -> pd.DataFrame:
     """結論 CSV（帶精確欄就用精確值）。"""
-    return with_exact(pd.read_csv(os.path.join(MULTI, name), encoding="utf-8-sig"))
+    return with_exact(common.read_result_csv(os.path.join(MULTI, name), encoding="utf-8-sig"))
 
 
 def conclusion_rows() -> tuple:

@@ -27,6 +27,7 @@ if _root not in sys.path:
 
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _02_strategy.double_bottom_strategy.single_double_bottom_strategy import RESULT_DIR  # noqa: E402
 from _03_multi_strategy.base.fast_multi import EXACT, exact_stats  # noqa: E402
 
@@ -37,8 +38,8 @@ LIQS = (True,)                        # 只用可成交格（用戶 2026-11-11�
 N_CELLS = len(PCTS) * len(LIQS)
 CELL_HEAD = "".join(f"<th>{p}%<br>可成交</th>" for p in PCTS)
 ENTRIES = ("base", "neck", "gap", "rise", "drop", "height")   # 文章只收型態條件（2026-10-21 用戶定）
-COLS = ["交易次數", "勝率%", "平均持有天", "獲利平均%", "虧損平均%", "中位數%", "期望值/筆", "獲利因子", "總獲利(萬)"]
-PAINT = ("勝率%", "獲利平均%", "中位數%", "期望值/筆", "獲利因子")
+COLS = ["交易次數", "勝率%", "平均持有天", "獲利平均%", "虧損平均%", "中位數%", "期望值", "獲利因子(PF)", "總獲利(萬)"]
+PAINT = ("勝率%", "獲利平均%", "中位數%", "期望值", "獲利因子(PF)")
 HEAD = ("<thead><tr><th>版本</th><th>交易次數</th><th>勝率%</th><th>平均持有天</th><th>獲利平均%</th>"
         "<th>虧損平均%</th><th>中位數%</th><th>期望值(EV)/筆(元)</th><th>獲利因子(PF)</th><th>總獲利(萬)</th>"
         "</tr></thead>")
@@ -52,9 +53,9 @@ def half_up(v, nd: int) -> Decimal:
 
 
 def nd_of(col: str) -> int:
-    if col in ("交易次數", "平均持有天", "期望值/筆", "總獲利(萬)"):
+    if col in ("交易次數", "平均持有天", "期望值", "總獲利(萬)"):
         return 0
-    return 3 if col == "獲利因子" else 1
+    return 3 if col == "獲利因子(PF)" else 1
 
 
 def fmt(col: str, v) -> str:
@@ -70,7 +71,7 @@ def stats(entries=ENTRIES) -> pd.DataFrame:
             for e in entries:
                 tag = f"p{p}_{'liq1000' if liq else 'raw'}__{e}"
                 folder = os.path.join(SRC, tag)
-                tr = pd.read_csv(os.path.join(folder, f"single_double_bottom_{tag}_trades.csv"))
+                tr = common.read_result_csv(os.path.join(folder, f"single_double_bottom_{tag}_trades.csv"))
                 ex = exact_stats(tr)
                 with open(os.path.join(folder, "diag.json"), encoding="utf-8") as f:
                     dg = json.load(f)
@@ -135,9 +136,9 @@ def summary_table(df: pd.DataFrame, entries=ENTRIES) -> str:
         pfs, ups = [], 0
         for liq in LIQS:
             for p in PCTS:
-                v = df[(df["門檻%"] == p) & (df["可成交"] == liq) & (df["變體"] == e)].iloc[0]["獲利因子"]
-                b = df[(df["門檻%"] == p) & (df["可成交"] == liq) & (df["變體"] == "base")].iloc[0]["獲利因子"]
-                pfs.append(fmt("獲利因子", v))
+                v = df[(df["門檻%"] == p) & (df["可成交"] == liq) & (df["變體"] == e)].iloc[0]["獲利因子(PF)"]
+                b = df[(df["門檻%"] == p) & (df["可成交"] == liq) & (df["變體"] == "base")].iloc[0]["獲利因子(PF)"]
+                pfs.append(fmt("獲利因子(PF)", v))
                 ups += v > b
         eff = df[(df["變體"] == e) & df["可成交"].isin(LIQS)]["生效率%"]
         tail = ("<td>—</td><td>—</td>" if e == "base"

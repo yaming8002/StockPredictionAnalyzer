@@ -47,7 +47,7 @@ def article_path(slug: str) -> str:
 def early_share(rule: str, p: int, liq: bool) -> float:
     """持有日曆天 ≤ EARLY_DAYS 的交易佔比（%，排除淨損益 0，同 exact_stats 的母體）。"""
     tag = f"p{p}_{'liq1000' if liq else 'raw'}__{rule}"
-    tr = pd.read_csv(os.path.join(SRC, tag, f"single_double_bottom_{tag}_trades.csv"))
+    tr = common.read_result_csv(os.path.join(SRC, tag, f"single_double_bottom_{tag}_trades.csv"))
     tr = tr[pd.to_numeric(tr["real_pnl"], errors="coerce").fillna(0) != 0]
     days = (pd.to_datetime(tr["sell_date"]) - pd.to_datetime(tr["buy_date"])).dt.days
     return float((days <= EARLY_DAYS).mean() * 100)
@@ -65,15 +65,15 @@ def claims(df) -> dict:
     down = lambda e, c: all(a < b for a, b in six(df, e, c))
     up = lambda e, c: all(a > b for a, b in six(df, e, c))
     diff = lambda e, c: [a - b for a, b in six(df, e, c)]
-    pf2 = lambda e: f"{arrow(df, e, 3, True, '獲利因子')}；{arrow(df, e, 9, True, '獲利因子')}"
+    pf2 = lambda e: f"{arrow(df, e, 3, True, '獲利因子(PF)')}；{arrow(df, e, 9, True, '獲利因子(PF)')}"
     rng = lambda xs, nd=1, unit="%": f"{half_up(min(xs), nd)}{unit}～{half_up(max(xs), nd)}{unit}"
-    pfv = lambda e, p, liq: cell(df, e, p, liq, "獲利因子")
+    pfv = lambda e, p, liq: cell(df, e, p, liq, "獲利因子(PF)")
     neck_med = [cell(df, "neck", p, True, "中位數%") for p in PCTS]
     early = [early_share("neck", p, True) for p in (3, 9)]
     return {
         # 測幅滿足點
         "target_eff": (all(col("target", "生效率%") == col("target", "搶先率%")), pct_range(col("target", "生效率%"))),
-        "target_pf": (down("target", "獲利因子") and pfv("target", 3, True) < 1, pf2("target")),
+        "target_pf": (down("target", "獲利因子(PF)") and pfv("target", 3, True) < 1, pf2("target")),
         "target_win": (up("target", "勝率%"), f"提高 {rng(diff('target', '勝率%'), unit='')} 個百分點"),
         "target_avgwin": (down("target", "獲利平均%") and min(diff("target", "勝率%")) > 0,
                           f"{arrow(df, 'target', 3, True, '獲利平均%', '%')}；{arrow(df, 'target', 9, True, '獲利平均%', '%')}"),
@@ -83,8 +83,8 @@ def claims(df) -> dict:
                          pct_range(col("target65", "生效率%"))),
         "target65_win": (all(a > b for a, b in zip(diff("target65", "勝率%"), diff("target", "勝率%"))),
                          f"提高 {rng(diff('target65', '勝率%'), unit='')} 個百分點"),
-        "target65_pf": (down("target65", "獲利因子")
-                        and all(a < b for (a, _), (b, _) in zip(six(df, "target65", "獲利因子"), six(df, "target", "獲利因子")))
+        "target65_pf": (down("target65", "獲利因子(PF)")
+                        and all(a < b for (a, _), (b, _) in zip(six(df, "target65", "獲利因子(PF)"), six(df, "target", "獲利因子(PF)")))
                         and pfv("target65", 3, True) < 1 and abs(pfv("target65", 6, True) - 1) < 0.01,
                         pf2("target65")),
         # 頸線停利
@@ -96,8 +96,8 @@ def claims(df) -> dict:
                         "（" + "、".join(f"{p}% {fmt('中位數%', cell(df, 'neck', p, True, '中位數%'))}%" for p in PCTS) + "）"),
         "neck_avgwin": (max(col("neck", "獲利平均%")) < 10, rng(col("neck", "獲利平均%"))),
         "neck_hold": (max(col("neck", "平均持有天")) < 30, rng(col("neck", "平均持有天"), 0, " 天").replace(" 天～", "～")),
-        "neck_pf": (all(v < 1 for v, _ in six(df, "neck", "獲利因子")) and pfv("neck", 9, True) == max(v for v, _ in six(df, "neck", "獲利因子")),
-                    f"三格的獲利因子都在 1 以下（最高是 9% 的 {fmt('獲利因子', pfv('neck', 9, True))}）"),
+        "neck_pf": (all(v < 1 for v, _ in six(df, "neck", "獲利因子(PF)")) and pfv("neck", 9, True) == max(v for v, _ in six(df, "neck", "獲利因子(PF)")),
+                    f"三格的獲利因子都在 1 以下（最高是 9% 的 {fmt('獲利因子(PF)', pfv('neck', 9, True))}）"),
         "neck_early": (True, f"3% 佔 {half_up(early[0], 0)}%、9% 佔 {half_up(early[1], 0)}%"),
         # 突破後跌回頸線
         "neckfail_eff": (True, pct_range(col("neckfail", "生效率%"))),
@@ -106,20 +106,20 @@ def claims(df) -> dict:
         "neckfail_loss": (up("neckfail", "虧損平均%"), arrow(df, "neckfail", 9, True, "虧損平均%", "%")),
         "neckfail_median": (up("neckfail", "中位數%"), arrow(df, "neckfail", 9, True, "中位數%", "%")),
         "neckfail_avgwin": (down("neckfail", "獲利平均%"), arrow(df, "neckfail", 9, True, "獲利平均%", "%")),
-        "neckfail_pf": (down("neckfail", "獲利因子"), pf2("neckfail")),
+        "neckfail_pf": (down("neckfail", "獲利因子(PF)"), pf2("neckfail")),
         # 跌破突破 K 棒低點
         "bolow_eff": (True, pct_range(col("bolow", "生效率%"))),
         "bolow_pre": (True, pct_range(col("bolow", "搶先率%"))),
         "bolow_loss": (up("bolow", "虧損平均%") and down("bolow", "獲利平均%"),
                        arrow(df, "bolow", 9, True, "虧損平均%", "%")),
-        "bolow_pf": (down("bolow", "獲利因子"), pf2("bolow")),
+        "bolow_pf": (down("bolow", "獲利因子(PF)"), pf2("bolow")),
         # 重點整理
-        "all_down": (all(down(e, "獲利因子") and down(e, "平均持有天") for e in EXITS[1:])
-                     and all(a > b > c for a, b, c in zip(*[[v for v, _ in six(df, e, "獲利因子")]
+        "all_down": (all(down(e, "獲利因子(PF)") and down(e, "平均持有天") for e in EXITS[1:])
+                     and all(a > b > c for a, b, c in zip(*[[v for v, _ in six(df, e, "獲利因子(PF)")]
                                                             for e in ("target", "target65", "neck")]))
                      and all(a < b < c for a, b, c in zip(*[diff(e, "勝率%") for e in ("target", "target65", "neck")]))
-                     and all(cell(df, "base", 3, l, "獲利因子") < cell(df, "base", 6, l, "獲利因子")
-                             < cell(df, "base", 9, l, "獲利因子") for l in (True,)),
+                     and all(cell(df, "base", 3, l, "獲利因子(PF)") < cell(df, "base", 6, l, "獲利因子(PF)")
+                             < cell(df, "base", 9, l, "獲利因子(PF)") for l in (True,)),
                      "五條、十五格的獲利因子都比基本版低"),
     }
 

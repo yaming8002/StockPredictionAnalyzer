@@ -46,8 +46,8 @@ def main() -> int:
     ck.tables(text, article1())
     r, a = single_metrics(RAW), single_metrics(AMT)
 
-    ck.contains(text, f"獲利因子 {fmt(r['獲利因子'], 2)}（小於 1", "無門檻 PF")
-    ck.contains(text, f"每筆平均期望值 {fmt(r['期望值/筆'], 0)} 元、中位數 {fmt(r['中位數%'], 1)}%，"
+    ck.contains(text, f"獲利因子 {fmt(r['獲利因子(PF)'], 2)}（小於 1", "無門檻 PF")
+    ck.contains(text, f"每筆平均期望值 {fmt(r['期望值'], 0)} 元、中位數 {fmt(r['中位數%'], 1)}%，"
                       f"總損益 {fmt(r['總獲利(萬)'], 0)} 萬", "無門檻 EV／中位／總損益")
     ck.check(650_000 <= r["交易次數"] < 700_000, f"「近七十萬筆」：實際 {r['交易次數']:,}")
     ck.contains(text, f"近七十萬筆交易、平均每筆只抱 {fmt(r['平均持有天'], 0)} 天", "持有天數")
@@ -56,13 +56,13 @@ def main() -> int:
     ck.contains(text, f"（{r['交易次數'] // 10_000} 萬 → {a['交易次數'] // 10_000} 萬筆）", "筆數萬位")
     ck.check(0.4 <= a["交易次數"] / r["交易次數"] <= 0.6,
              f"「少了一半」：比例 {a['交易次數'] / r['交易次數']:.3f}")
-    ck.contains(text, f"獲利因子從 {fmt(r['獲利因子'], 2)} 再降到 {fmt(a['獲利因子'], 2)}、"
-                      f"每筆期望值從 {fmt(r['期望值/筆'], 0)} 元變成 {fmt(a['期望值/筆'], 0)} 元、"
+    ck.contains(text, f"獲利因子從 {fmt(r['獲利因子(PF)'], 2)} 再降到 {fmt(a['獲利因子(PF)'], 2)}、"
+                      f"每筆期望值從 {fmt(r['期望值'], 0)} 元變成 {fmt(a['期望值'], 0)} 元、"
                       f"中位數從 {fmt(r['中位數%'], 1)}% 變成 {fmt(a['中位數%'], 1)}%", "加門檻前後對照")
     ck.contains(text, f"從 {fmt(r['總獲利(萬)'], 0)} 萬縮到 {fmt(a['總獲利(萬)'], 0)} 萬", "總損益縮小")
-    ck.check(a["獲利因子"] < r["獲利因子"] and a["期望值/筆"] < r["期望值/筆"],
+    ck.check(a["獲利因子(PF)"] < r["獲利因子(PF)"] and a["期望值"] < r["期望值"],
              "「結果並沒有變好、每筆平均更差」")
-    ck.check(a["獲利因子"] < 1 and r["獲利因子"] < 1, "兩版都是負的（PF < 1）")
+    ck.check(a["獲利因子(PF)"] < 1 and r["獲利因子(PF)"] < 1, "兩版都是負的（PF < 1）")
     return ck.done()
 
 

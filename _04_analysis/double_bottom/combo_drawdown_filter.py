@@ -69,7 +69,7 @@ def worst_close_pct(tr: pd.DataFrame, px: dict) -> np.ndarray:
 
 def cell_drawdown(p: int, e: str, x: str, px: dict) -> dict:
     tag = _tag(p / 100, LIQ, e, x)
-    tr = pd.read_csv(os.path.join(RESULT_DIR, SUB, tag, f"single_double_bottom_{tag}_trades.csv"),
+    tr = common.read_result_csv(os.path.join(RESULT_DIR, SUB, tag, f"single_double_bottom_{tag}_trades.csv"),
                      parse_dates=["buy_date", "sell_date"])
     tr["real_pnl"] = pd.to_numeric(tr["real_pnl"], errors="coerce").fillna(0)
     tr = tr[tr["real_pnl"] != 0].reset_index(drop=True)
@@ -82,7 +82,7 @@ def cell_drawdown(p: int, e: str, x: str, px: dict) -> dict:
     return {"門檻%": p, "可成交": LIQ, "進場": e, "出場": x, "交易次數": len(tr),
             "超過一年%": (held > 365).mean() * 100, "曾跌10%": (dd <= -10).mean() * 100,
             "曾跌20%": (dd <= DROP).mean() * 100,
-            "獲利因子_精確": pnl[pnl > 0].sum() / abs(pnl[pnl < 0].sum()), "期望值_精確": pnl.mean()}
+            "獲利因子(PF)_精確": pnl[pnl > 0].sum() / abs(pnl[pnl < 0].sum()), "期望值_精確": pnl.mean()}
 
 
 def rerank(passed: pd.DataFrame, summ: pd.DataFrame) -> pd.DataFrame:
@@ -102,7 +102,7 @@ def rerank(passed: pd.DataFrame, summ: pd.DataFrame) -> pd.DataFrame:
 
 def rank_cells(df: pd.DataFrame) -> pd.DataFrame:
     """逐格排名：只收本格通過的格子，精確獲利因子由高到低、同分看期望值；標出交易數是否到抽樣下限。"""
-    g = df[df["本格通過"]].sort_values(["獲利因子_精確", "期望值_精確"], ascending=False).reset_index(drop=True)
+    g = df[df["本格通過"]].sort_values(["獲利因子(PF)_精確", "期望值_精確"], ascending=False).reset_index(drop=True)
     g.insert(0, "名次", range(1, len(g) + 1))
     g["夠筆數"] = g["交易次數"] >= T_LOW
     return g

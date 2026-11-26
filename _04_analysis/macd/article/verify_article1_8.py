@@ -43,7 +43,7 @@ POOL_FILES = ["_baselines", "_matrix_3x3", "_entry_sweep_v2", "_exit_parallel",
 # 表頭關鍵字 → CSV 欄名（依序比對，先中先贏）
 HEAD_MAP = [("交易次數", "交易次數"), ("勝率", "勝率%"), ("持有", "平均持有天"),
             ("獲利平均", "獲利平均%"), ("虧損平均", "虧損平均%"), ("中位", "中位數%"),
-            ("期望值", "期望值/筆"), ("獲利因子", "獲利因子"), ("總獲利", "總獲利(萬)"),
+            ("期望值", "期望值"), ("獲利因子", "獲利因子(PF)"), ("總獲利", "總獲利(萬)"),
             ("未平倉", "未平倉%")]
 NUM_RE = re.compile(r"^[+−-]?[\d,]+(\.\d+)?%?$")
 
@@ -52,7 +52,7 @@ def load_pool(pool_dir: str) -> pd.DataFrame:
     """把六份結果疊成一張池（只留比對用的數字欄）。"""
     frames = []
     for name in POOL_FILES:
-        d = pd.read_csv(os.path.join(pool_dir, name + ".csv"))
+        d = common.read_result_csv(os.path.join(pool_dir, name + ".csv"))
         d["_src"] = name
         frames.append(d)
     return pd.concat(frames, ignore_index=True)
@@ -106,7 +106,7 @@ def col_map(heads):
             if key in h:
                 out[i] = col
                 break
-    return out if "交易次數" in out.values() and "獲利因子" in out.values() else None
+    return out if "交易次數" in out.values() and "獲利因子(PF)" in out.values() else None
 
 
 def match_row(pool, cells, cmap):
@@ -229,9 +229,9 @@ def check_colors(tabs, report):
 
 def check_risk_summary(rows, pool_dir, report):
     """（八）風控彙總：四個母體 B疊加 vs 原生出場的平均變化（pp／獲利因子）。"""
-    sw = pd.read_csv(os.path.join(pool_dir, "_exit_sweep.csv"))
+    sw = common.read_result_csv(os.path.join(pool_dir, "_exit_sweep.csv"))
     nat = {}
-    mx = pd.read_csv(os.path.join(pool_dir, "_matrix_3x3.csv"))
+    mx = common.read_result_csv(os.path.join(pool_dir, "_matrix_3x3.csv"))
     # 四個母體的原生出場：三條對角線＋交叉進×零軸出
     for pop, combo in {"交叉": "交叉進 × 交叉出", "零軸": "零軸進 × 零軸出",
                        "背離": "背離進 × 交叉出", "交叉進×零軸出": "交叉進 × 零軸出"}.items():
@@ -246,7 +246,7 @@ def check_risk_summary(rows, pool_dir, report):
         sub = sw[(sw["組"] == "B疊加") & (sw["出場"] == key)].set_index("母體")
         d_loss = [sub.loc[p, "虧損平均%"] - nat[p]["虧損平均%"] for p in nat]
         d_win = [sub.loc[p, "獲利平均%"] - nat[p]["獲利平均%"] for p in nat]
-        d_pf = [sub.loc[p, "獲利因子"] - nat[p]["獲利因子"] for p in nat]
+        d_pf = [sub.loc[p, "獲利因子(PF)"] - nat[p]["獲利因子(PF)"] for p in nat]
         # CSV 每格已進位（% 到 0.01、獲利因子到 0.0001），差值最多偏 ±1 個末位：
         # 文章是用未進位值算的，所以這裡只要求落在「CSV 推得出的範圍」內
         sure = sum(x > 0.01 + 1e-9 for x in d_loss)
@@ -292,7 +292,7 @@ def main() -> int:
     posts = os.path.join(common.require_blog_dir(), "site", "content", "posts")
     pool = load_pool(a.pool_dir)
     pf4 = {Decimal(repr(float(v))).quantize(Decimal("0.0001"), ROUND_HALF_UP)
-           for v in pool["獲利因子"].dropna()}
+           for v in pool["獲利因子(PF)"].dropna()}
     total = errs = edges = 0
     for slug in SLUGS:
         md = io.open(os.path.join(posts, slug + ".md"), encoding="utf-8").read()

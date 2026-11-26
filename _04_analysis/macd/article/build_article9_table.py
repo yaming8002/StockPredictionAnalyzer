@@ -47,7 +47,7 @@ RULES = [
 
 def load_replace() -> pd.DataFrame:
     """讀替換版結果，母體換成短名（verify_article9 共用）。"""
-    d = pd.read_csv(REPLACE_CSV)
+    d = common.read_result_csv(REPLACE_CSV)
     d["母體"] = d["母體"].map(POP_SHORT)
     return d
 
@@ -57,13 +57,13 @@ def appended_pf() -> dict:
     cache, out = {}, {}
     for _, name, _, fname, grp, key in RULES:
         if fname not in cache:
-            cache[fname] = pd.read_csv(os.path.join(SWEEP_DIR, fname))
+            cache[fname] = common.read_result_csv(os.path.join(SWEEP_DIR, fname))
         d = cache[fname]
         for pop in POPS:
             r = d[(d["組"] == grp) & (d["母體"] == pop) & (d["出場"] == key)]
             if len(r) != 1:
                 sys.exit(f"{fname} 查無（或重複）{grp}/{pop}/{key}")
-            out[(name, pop)] = float(r.iloc[0]["獲利因子"])
+            out[(name, pop)] = float(r.iloc[0]["獲利因子(PF)"])
     return out
 
 
@@ -73,13 +73,13 @@ def main():
     rows, stats = [], []
     for pop in POPS:
         base = d[(d["母體"] == pop) & (d["出場"] == "原生出場")].iloc[0]
-        base_pf, base_days = base["獲利因子"], base["平均持有天"]
+        base_pf, base_days = base["獲利因子(PF)"], base["平均持有天"]
         for key, name, src, *_ in RULES:
             r = d[(d["母體"] == pop) & (d["出場"] == key)]
             if not len(r):
                 sys.exit(f"CSV 查無 {pop}/{key}")
             r = r.iloc[0]
-            rep, unc, days = r["獲利因子"], r["未平倉%"], r["平均持有天"]
+            rep, unc, days = r["獲利因子(PF)"], r["未平倉%"], r["平均持有天"]
             a = add[(name, pop)]
             cls = "up" if rep > a else "down"    # 底色比的是同一列的「附加」
             rows.append(

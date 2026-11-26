@@ -47,14 +47,14 @@ def pct_range(s) -> str:
 
 
 def claims(df) -> list:
-    pf = lambda e, p: fmt("獲利因子", cell(df, e, p, True, "獲利因子"))
+    pf = lambda e, p: fmt("獲利因子(PF)", cell(df, e, p, True, "獲利因子(PF)"))
     one = lambda e, p, c: fmt(c, cell(df, e, p, True, c))
     eff = lambda e: df[(df["變體"] == e) & df["可成交"]]["生效率%"]
-    ups = lambda e, c="獲利因子": [a > b for a, b in six(df, e, c)]
+    ups = lambda e, c="獲利因子(PF)": [a > b for a, b in six(df, e, c)]
     effp = lambda e, p: [cell(df, e, p, True, "生效率%")]
     win_diff = [a - b for a, b in six(df, "neck", "勝率%")]
     neck_n = [a / b for a, b in six(df, "neck", "交易次數")]
-    d9 = half_up(cell(df, "height", 9, True, "獲利因子") - cell(df, "base", 9, True, "獲利因子"), 4)
+    d9 = half_up(cell(df, "height", 9, True, "獲利因子(PF)") - cell(df, "base", 9, True, "獲利因子(PF)"), 4)
     out = [
         # 頸線突破
         ("頸線 生效率範圍", True, f"生效率在 {pct_range(eff('neck'))}，也就是大約三分之一"),
@@ -73,14 +73,14 @@ def claims(df) -> list:
         ("間隔 生效率", True, f"3% 擋掉 {pct_range(effp('gap', 3))}，6% 約 {pct_range(effp('gap', 6))}，到 9% 只剩 {pct_range(effp('gap', 9))}"),
         ("間隔 只有 3% 升、其餘差 < 0.02",
          ups("gap") == [True, False, False]
-         and all(abs(a - b) < 0.02 for (a, b), u in zip(six(df, "gap", "獲利因子"), ups("gap")) if not u),
+         and all(abs(a - b) < 0.02 for (a, b), u in zip(six(df, "gap", "獲利因子(PF)"), ups("gap")) if not u),
          f"獲利因子只有 3% 比基本版高（{pf('base', 3)} → {pf('gap', 3)}）"),
         # 第二底墊高
         ("墊高 生效率範圍且門檻越大越低", effp("rise", 3)[0] > effp("rise", 6)[0] > effp("rise", 9)[0],
          f"生效率在 {pct_range(eff('rise'))}，門檻越大越低"),
         ("墊高 只有 9% 升、約 0.01",
          ups("rise") == [False, False, True]
-         and all(abs(a - b) < 0.015 for (a, b), u in zip(six(df, "rise", "獲利因子"), ups("rise")) if u),
+         and all(abs(a - b) < 0.015 for (a, b), u in zip(six(df, "rise", "獲利因子(PF)"), ups("rise")) if u),
          "獲利因子只有 9% 比基本版高"),
         # 前段跌幅
         ("跌幅 生效率", min(effp("drop", 3)) > 84.5,
@@ -96,7 +96,7 @@ def claims(df) -> list:
          f"3% 擋掉約 {pct_range(effp('height', 3))}，6% 約 {pct_range(effp('height', 6))}，"
          f"9% 只有 {half_up(effp('height', 9)[0], 1)}%"),
         ("高度 9% 門檻下頸線下限 = 1/0.91 < 1.10", 1 / 0.91 < 1.10 and str(half_up(1 / 0.91, 3)) == "1.099", "約 × 1.099"),
-        ("高度 3%/6% 降、3% 跌破 1", ups("height")[:2] == [False, False] and cell(df, "height", 3, True, "獲利因子") < 1,
+        ("高度 3%/6% 降、3% 跌破 1", ups("height")[:2] == [False, False] and cell(df, "height", 3, True, "獲利因子(PF)") < 1,
          f"3% 降得最多（{pf('base', 3)} → {pf('height', 3)}，跌破 1）"),
         ("高度 3% 勝率降", not ups("height", "勝率%")[0],
          f"3%：{half_up(cell(df, 'base', 3, True, '勝率%'), 1)}% → {half_up(cell(df, 'height', 3, True, '勝率%'), 1)}%"),

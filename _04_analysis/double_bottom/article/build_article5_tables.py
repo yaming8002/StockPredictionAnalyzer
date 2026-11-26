@@ -37,9 +37,9 @@ def summary_table(df: pd.DataFrame, exits=ALL_EXITS) -> str:
         pfs, ups = [], 0
         for liq in LIQS:
             for p in PCTS:
-                v = df[(df["門檻%"] == p) & (df["可成交"] == liq) & (df["變體"] == e)].iloc[0]["獲利因子"]
-                b = df[(df["門檻%"] == p) & (df["可成交"] == liq) & (df["變體"] == "base")].iloc[0]["獲利因子"]
-                pfs.append(fmt("獲利因子", v))
+                v = df[(df["門檻%"] == p) & (df["可成交"] == liq) & (df["變體"] == e)].iloc[0]["獲利因子(PF)"]
+                b = df[(df["門檻%"] == p) & (df["可成交"] == liq) & (df["變體"] == "base")].iloc[0]["獲利因子(PF)"]
+                pfs.append(fmt("獲利因子(PF)", v))
                 ups += v > b
         sub = df[df["變體"] == e]
         rng = lambda c: span(sub[c].min(), sub[c].max(), 0)

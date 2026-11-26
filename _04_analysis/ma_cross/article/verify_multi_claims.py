@@ -37,7 +37,7 @@ def order_stats(df, mode: str) -> dict:
     formula = sizing_names(mode)[0]
     tot = {p: {o: tot_wan(mrow(df, p, formula, o)) for o in ORDERS} for p in PAIRS}
     shown = {p: {o: half_up(v, 0) for o, v in tot[p].items()} for p in PAIRS}
-    ev = {p: {o: half_up(mrow(df, p, formula, o)["期望值/筆"], 0) for o in ORDERS} for p in PAIRS}
+    ev = {p: {o: half_up(mrow(df, p, formula, o)["期望值"], 0) for o in ORDERS} for p in PAIRS}
     same = [p for p in PAIRS if len(set(shown[p].values())) == 1 and len(set(ev[p].values())) == 1]
     spread = {p: max(tot[p].values()) - min(tot[p].values()) for p in PAIRS}
     top = {o: [] for o in ORDERS}

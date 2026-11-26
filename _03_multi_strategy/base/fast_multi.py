@@ -274,7 +274,7 @@ def run_panel_fast(strategy, panel: dict, prio: np.ndarray = None,
 
 def exact_stats(trades: pd.DataFrame) -> dict:
     """
-    規格 9 欄的**未四捨五入**值（定義同 common.summarize_trades：排除淨損益 0、報酬率用毛報酬），
+    規格 11 欄的**未四捨五入**值（定義同 common.summarize_trades：排除淨損益 0、報酬率用毛報酬），
     鍵名＝「<規格欄>_精確」。summarize_trades 存兩位小數，文章再取一位時若剛好落在 .x5 會變成
     兩次進位、方向可能錯，所以另存精確值給出表端用；不改 summarize_trades 本身（其他系列共用）。
     與 kd_multi_driver.exact_stats 同定義（MACD／均線交叉 driver 用這一份）。
@@ -288,10 +288,13 @@ def exact_stats(trades: pd.DataFrame) -> dict:
     days = (pd.to_datetime(t["sell_date"]) - pd.to_datetime(t["buy_date"])).dt.days
     win, lose = pnl > 0, pnl < 0
     loss_sum = abs(float(pnl[lose].sum()))
+    daily_pf, profit_per_day = common.time_cost_exact(pnl, days)
     vals = {"勝率%": win.sum() / n * 100, "平均持有天": float(days.mean()),
             "獲利平均%": float(rate[win].mean()) if win.any() else 0.0,
             "虧損平均%": float(rate[lose].mean()) if lose.any() else 0.0,
-            "中位數%": float(rate.median()), "期望值/筆": float(pnl.sum()) / n,
-            "獲利因子": float(pnl[win].sum()) / loss_sum if loss_sum > 0 else float("inf"),
+            "中位數%": float(rate.median()), "期望值": float(pnl.sum()) / n,
+            "日均獲利(元)": profit_per_day,
+            "獲利因子(PF)": float(pnl[win].sum()) / loss_sum if loss_sum > 0 else float("inf"),
+            "日化PF": daily_pf,
             "總獲利(萬)": float(pnl.sum()) / 10_000}
     return {k + EXACT: v for k, v in vals.items()}

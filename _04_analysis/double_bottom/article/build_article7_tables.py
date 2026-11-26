@@ -33,6 +33,7 @@ import functools  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _02_strategy.double_bottom_strategy.combo_sweep import SUB, _tag  # noqa: E402
 from _02_strategy.double_bottom_strategy.single_double_bottom_strategy import RESULT_DIR  # noqa: E402
 from _03_multi_strategy.base.fast_multi import EXACT, exact_stats  # noqa: E402
@@ -69,7 +70,7 @@ def combo_label(e: str, x: str, sep: str = "<br>× ") -> str:
 
 def _one(p: int, liq: bool, e: str, x: str) -> dict:
     tag = _tag(p / 100, liq, e, x)
-    tr = pd.read_csv(os.path.join(SRC, tag, f"single_double_bottom_{tag}_trades.csv"))
+    tr = common.read_result_csv(os.path.join(SRC, tag, f"single_double_bottom_{tag}_trades.csv"))
     ex = exact_stats(tr)
     n = int((pd.to_numeric(tr["real_pnl"], errors="coerce").fillna(0) != 0).sum())
     return {"門檻%": p, "可成交": liq, "進場": e, "出場": x, "交易次數": n,
@@ -127,7 +128,7 @@ def ranking_table(rank: pd.DataFrame, summ: pd.DataFrame, top: int = TOP_TABLE) 
     out = ['<div class="table-wrap"><table class="bt-table">', head, "<tbody>"]
     for _, r in rank.head(top).iterrows():
         # 從逐筆交易重算精確值再一次 half-up；彙總檔 PF 已四捨五入到 4 位，再進位會跟 10 欄表差 0.001
-        pfs = [fmt("獲利因子", _one_cached(p, True, r["進場"], r["出場"])["獲利因子"]) for p in PCTS]
+        pfs = [fmt("獲利因子(PF)", _one_cached(p, True, r["進場"], r["出場"])["獲利因子(PF)"]) for p in PCTS]
         worst = half_up(r["pf_rank_worst"], 1).normalize()
         out.append(f"<tr><td>{r['名次']}</td><td>{combo_label(r['進場'], r['出場'], ' × ')}</td>"
                    f"{''.join(f'<td>{v}</td>' for v in pfs)}<td>{half_up(r['pf_rank_mean'], 1)}</td>"
@@ -153,7 +154,7 @@ def combo_or_base(e: str, x: str, sep: str) -> str:
 
 def mc_table(path: str = MC_FILE, labels=None) -> str:
     """labels：每列的組合名稱（依 CSV 列序）；不給時用 CSV 的名次＋組合。"""
-    mc = pd.read_csv(path)
+    mc = common.read_result_csv(path)
     head = ("<thead><tr><th>組合</th><th>交易數</th><th>勝率%</th><th>賺賠比</th><th>報酬%<br>悲觀P5</th>"
             "<th>報酬%<br>中位</th><th>報酬%<br>樂觀P95</th><th>區間<br>寬度</th><th>本金大虧%<br>(跌破5成)</th>"
             "<th>連敗<br>P95</th><th>回撤%<br>P95</th></tr></thead>")
@@ -172,7 +173,7 @@ def mc_table(path: str = MC_FILE, labels=None) -> str:
 def appendix_table(df, p: int) -> str:
     """ZigZag p% 可成交，148 種組合全列：基本版第一列，其餘依獲利因子由高到低；不上色。"""
     cell = df[(df["門檻%"] == p) & df["可成交"]]
-    rest = cell[~((cell["進場"] == "base") & (cell["出場"] == "base"))].sort_values("獲利因子", ascending=False)
+    rest = cell[~((cell["進場"] == "base") & (cell["出場"] == "base"))].sort_values("獲利因子(PF)", ascending=False)
     rows = [_row("基本版", _get(df, p, True, *BASE))]
     rows += [_row(combo_label(r["進場"], r["出場"]), r) for _, r in rest.iterrows()]
     return _wrap(rows, False)
@@ -181,7 +182,7 @@ def appendix_table(df, p: int) -> str:
 def _closed_combo_trades(p: int, liq: bool, e: str, x: str) -> pd.DataFrame:
     """該組該格的已平倉交易；排掉損益剛好 0 的，與主表「交易次數」同一批。"""
     tag = _tag(p / 100, liq, e, x)
-    tr = pd.read_csv(os.path.join(SRC, tag, f"single_double_bottom_{tag}_trades.csv"),
+    tr = common.read_result_csv(os.path.join(SRC, tag, f"single_double_bottom_{tag}_trades.csv"),
                      parse_dates=["buy_date", "sell_date"])
     tr["real_pnl"] = pd.to_numeric(tr["real_pnl"], errors="coerce").fillna(0)
     return tr[tr["real_pnl"] != 0].reset_index(drop=True)

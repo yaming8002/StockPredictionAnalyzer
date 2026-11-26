@@ -27,6 +27,7 @@ import pandas as pd  # noqa: E402
 
 from build_article2_tables import fmt, half_up  # noqa: E402
 from build_article4_tables import stats  # noqa: E402
+from build_article6_tables import PreFixDataMissing  # noqa: E402
 from build_article6_tables import (ALL_EXITS, OPEN_MAX, SRC, WARN, all_tables, drawdown,  # noqa: E402
                                    open_positions, open_summary, split_exits)
 from verify_article2 import six  # noqa: E402
@@ -41,7 +42,7 @@ def claims(df) -> dict:
     down = lambda e, c: all(a < b for a, b in six(df, e, c))
     up = lambda e, c: all(a > b for a, b in six(df, e, c))
     n_up = lambda e, c: sum(a > b for a, b in six(df, e, c))
-    pf2 = lambda e: f"{arrow(df, e, 3, True, '獲利因子')}；{arrow(df, e, 9, True, '獲利因子')}"
+    pf2 = lambda e: f"{arrow(df, e, 3, True, '獲利因子(PF)')}；{arrow(df, e, 9, True, '獲利因子(PF)')}"
     rng = lambda xs, nd, unit="%": f"{fmt_nd(min(xs), nd)}{unit}～{fmt_nd(max(xs), nd)}{unit}"
     days = lambda e: f"{half_up(col(e, '平均持有天').min(), 0)}～{half_up(col(e, '平均持有天').max(), 0)} 天"
     kept, dropped = split_exits(df)
@@ -74,13 +75,13 @@ def claims(df) -> dict:
         "neck_x2": (col("neck", "未平倉率%").min() > 2 * base_open_max,
                     f"但是基本版（{rng(col('base', '未平倉率%'), 1)}）的兩倍以上"),
         "neck_win": (True, rng(col("neck", "勝率%"), 1)),
-        "neck_pf": (min(col("neck", "獲利因子")) > 10, rng(col("neck", "獲利因子"), 3, "")),
+        "neck_pf": (min(col("neck", "獲利因子(PF)")) > 10, rng(col("neck", "獲利因子(PF)"), 3, "")),
         "neck_hold": (up("neck", "平均持有天"), days("neck")),
         # ATR
         "atr_hold": (col("atr", "平均持有天").max() - col("atr", "平均持有天").min() < 2, days("atr")),
-        "atr_pf": (down("atr", "獲利因子"), pf2("atr")),
+        "atr_pf": (down("atr", "獲利因子(PF)"), pf2("atr")),
         # 回落 20%
-        "trail_up": ([a > b for a, b in six(df, "trail20", "獲利因子")] == [True, True, False],
+        "trail_up": ([a > b for a, b in six(df, "trail20", "獲利因子(PF)")] == [True, True, False],
                      "3%、6% 比基本版高、9% 比基本版低"),
         "trail_pf": (True, pf2("trail20")),
         "trail_loss": (down("trail20", "虧損平均%"),                  # 六格都比基本版賠得深
@@ -88,9 +89,9 @@ def claims(df) -> dict:
         "trail_hold": (up("trail20", "平均持有天"), days("trail20")),
         # MA10
         "ma10_hold": (True, days("ma10")),
-        "ma10_pf": (max(col("ma10", "獲利因子")) < 1, rng(col("ma10", "獲利因子"), 3, "")),
+        "ma10_pf": (max(col("ma10", "獲利因子(PF)")) < 1, rng(col("ma10", "獲利因子(PF)"), 3, "")),
         # 高檔 M 頭
-        "mtop_pf": (up("mtop", "獲利因子") and up("mtop", "中位數%"), pf2("mtop")),
+        "mtop_pf": (up("mtop", "獲利因子(PF)") and up("mtop", "中位數%"), pf2("mtop")),
         "mtop_hold": (up("mtop", "平均持有天"), arrow(df, "mtop", 9, True, "平均持有天", " 天")),
         "mtop_open": (True, rng(col("mtop", "未平倉率%"), 1)),
         # 警告的兩條（逐條判定，不是門檻挑出來的）與回檔表的數字
@@ -142,4 +143,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except PreFixDataMissing as err:          # 資料修正前算的文章，現行資料重算不了：說明後結束
+        print(f"⚠ 無法驗證：{err}")
+        sys.exit(2)

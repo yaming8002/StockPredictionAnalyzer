@@ -69,8 +69,8 @@ def main() -> int:
     ent, ext = single_metrics("amt__low_zone__death"), single_metrics("amt__golden__high_death")
     loose, strict = single_metrics(ZONE + "__z30_70"), single_metrics(ZONE + "__z10_90")
 
-    ck.contains(text, f"獲利因子從 {fmt(b['獲利因子'], 2)} 到 {fmt(z['獲利因子'], 2)}、每筆期望值從 "
-                      f"{fmt(b['期望值/筆'], 0)} 元變 {fmt(z['期望值/筆'], 0, True)} 元、中位數也從負轉正"
+    ck.contains(text, f"獲利因子從 {fmt(b['獲利因子(PF)'], 2)} 到 {fmt(z['獲利因子(PF)'], 2)}、每筆期望值從 "
+                      f"{fmt(b['期望值'], 0)} 元變 {fmt(z['期望值'], 0, True)} 元、中位數也從負轉正"
                       f"（{fmt(z['中位數%'], 1, True)}%）、總損益從 {fmt(b['總獲利(萬)'], 0)} 萬變 "
                       f"{fmt(z['總獲利(萬)'], 0, True)} 萬", "限定前後對照")
     ck.check(b["中位數%"] < 0 < z["中位數%"], "中位數由負轉正")
@@ -80,26 +80,26 @@ def main() -> int:
     ck.contains(text, f"勝率也上到 {fmt(z['勝率%'], 1)}%", "勝率")
     tsmc_trade(ck, text)
 
-    ck.contains(text, f"（獲利因子 {fmt(ent['獲利因子'], 2)}、期望值 {fmt(ent['期望值/筆'], 0)} 元、"
+    ck.contains(text, f"（獲利因子 {fmt(ent['獲利因子(PF)'], 2)}、期望值 {fmt(ent['期望值'], 0)} 元、"
                       f"總損益 {fmt(ent['總獲利(萬)'], 0)} 萬）", "只有進場那半")
-    ck.check(ent["獲利因子"] < 1, "只有進場那半仍是負的")
-    ck.contains(text, f"獲利因子 {fmt(ext['獲利因子'], 2)}、總損益 {fmt(ext['總獲利(萬)'], 0, True)} 萬**，"
+    ck.check(ent["獲利因子(PF)"] < 1, "只有進場那半仍是負的")
+    ck.contains(text, f"獲利因子 {fmt(ext['獲利因子(PF)'], 2)}、總損益 {fmt(ext['總獲利(萬)'], 0, True)} 萬**，"
                       "反而是三個版本裡最高的", "只有出場那半")
     three = [ent, ext, z]
-    ck.check(ext["獲利因子"] == max(m["獲利因子"] for m in three)
+    ck.check(ext["獲利因子(PF)"] == max(m["獲利因子(PF)"] for m in three)
              and ext["總獲利(萬)"] == max(m["總獲利(萬)"] for m in three), "出場那半 PF、總損益皆三者最高")
-    ck.contains(text, f"完整版（{fmt(z['獲利因子'], 2)}），其實比「只有出場那半」（{fmt(ext['獲利因子'], 2)}）"
+    ck.contains(text, f"完整版（{fmt(z['獲利因子(PF)'], 2)}），其實比「只有出場那半」（{fmt(ext['獲利因子(PF)'], 2)}）"
                       "還低一些", "完整版 vs 出場那半")
     ck.contains(text, f"交易從 {wan(ext['交易次數'])} 萬筆被砍到 {wan(z['交易次數'])} 萬筆", "筆數砍掉")
 
-    ck.contains(text, f"獲利因子掉到 {fmt(loose['獲利因子'], 2)}、總損益只剩 {fmt(loose['總獲利(萬)'], 0, True)} 萬",
+    ck.contains(text, f"獲利因子掉到 {fmt(loose['獲利因子(PF)'], 2)}、總損益只剩 {fmt(loose['總獲利(萬)'], 0, True)} 萬",
                 "30/70")
     ck.check(loose["交易次數"] > z["交易次數"], "30/70 交易變多")
-    ck.contains(text, f"獲利因子衝到 {fmt(strict['獲利因子'], 2)}、每筆期望值 {fmt(strict['期望值/筆'], 0, True)} 元",
+    ck.contains(text, f"獲利因子衝到 {fmt(strict['獲利因子(PF)'], 2)}、每筆期望值 {fmt(strict['期望值'], 0, True)} 元",
                 "10/90")
     ck.contains(text, f"只湊出 {fmt(strict['交易次數'], 0)} 筆交易、平均一筆要抱 "
                       f"{fmt(strict['平均持有天'], 0)} 天（約 {fmt(strict['平均持有天'] / 365, 1)} 年）", "10/90 樣本")
-    ck.contains(text, f"20／80 版獲利因子 {fmt(z['獲利因子'], 2)}、總損益 {fmt(z['總獲利(萬)'], 0, True)} 萬",
+    ck.contains(text, f"20／80 版獲利因子 {fmt(z['獲利因子(PF)'], 2)}、總損益 {fmt(z['總獲利(萬)'], 0, True)} 萬",
                 "重點整理")
     return ck.done()
 

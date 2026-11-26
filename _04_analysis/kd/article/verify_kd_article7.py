@@ -16,6 +16,7 @@ if _root not in sys.path:
 
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _04_analysis.kd.article.build_kd_multi_tables import (block_order, load_multi,  # noqa: E402
                                                            random_note, tables_for)
 from _04_analysis.kd.article.kd_article_common import MULTI, Checker, fmt, read_post  # noqa: E402
@@ -36,11 +37,11 @@ def ordering_claims(ck: Checker, text: str, pct: pd.DataFrame):
     ck.contains(text, f"只有低檔＋紅K 的低價（{fmt(lr[0]['總獲利(萬)'], 0)} 萬）輸給隨機"
                       f"（{fmt(lr[1]['總獲利(萬)'], 0)} 萬）", "低檔＋紅K 例外")
     c = pick(pct, "創120日新高", "低價"), pick(pct, "創120日新高", "隨機")
-    ck.contains(text, f"創 120 低價總獲利 {fmt(c[0]['總獲利(萬)'], 0)} 萬／獲利因子 {fmt(c[0]['獲利因子'], 2)}，"
-                      f"遠高於隨機的 {fmt(c[1]['總獲利(萬)'], 0)} 萬／{fmt(c[1]['獲利因子'], 2)}", "創 120 例子")
+    ck.contains(text, f"創 120 低價總獲利 {fmt(c[0]['總獲利(萬)'], 0)} 萬／獲利因子 {fmt(c[0]['獲利因子(PF)'], 2)}，"
+                      f"遠高於隨機的 {fmt(c[1]['總獲利(萬)'], 0)} 萬／{fmt(c[1]['獲利因子(PF)'], 2)}", "創 120 例子")
     for order in ("成交金額", "高價"):
         lose = sum(pick(pct, n, order)["總獲利(萬)"] < pick(pct, n, "隨機")["總獲利(萬)"]
-                   and pick(pct, n, order)["獲利因子"] < pick(pct, n, "隨機")["獲利因子"] for n in names)
+                   and pick(pct, n, order)["獲利因子(PF)"] < pick(pct, n, "隨機")["獲利因子(PF)"] for n in names)
         ck.check(lose == 6, f"{order}六種策略全部輸給隨機：{lose}/6")
     dv, lw = pct[pct["交易策略"] == "底背離"], pct[pct["交易策略"] == "低檔＋紅K"]
     ck.contains(text, f"底背離四種排序總獲利 {fmt(dv['總獲利(萬)'].min(), 0)}～{fmt(dv['總獲利(萬)'].max(), 0)} 萬、"
@@ -59,11 +60,11 @@ def compare_claims(ck: Checker, text: str, fix: pd.DataFrame, pct: pd.DataFrame)
     ck.check(all(0.15 <= c < 0.35 for c in cut), f"底背離、低檔＋紅K 少了兩到三成：{[round(c, 3) for c in cut]}")
     ck.check(all(p[n]["擋單"] > f[n]["擋單"] for n in f), "擋單六種都變多")
     ck.check(all(p[n]["最大回撤%"] > f[n]["最大回撤%"] for n in f), "比例回撤六種都更深（「回撤更大」）")
-    up = [n for n in f if p[n]["獲利因子"] > f[n]["獲利因子"] and p[n]["總獲利(萬)"] > f[n]["總獲利(萬)"]]
+    up = [n for n in f if p[n]["獲利因子(PF)"] > f[n]["獲利因子(PF)"] and p[n]["總獲利(萬)"] > f[n]["總獲利(萬)"]]
     ck.check(set(up) == set(STRONG), f"強策略被放大、弱策略被拖累：{up}")
-    ck.contains(text, f"（創 120 獲利因子 {fmt(p['創120日新高']['獲利因子'], 2)} vs "
-                      f"{fmt(f['創120日新高']['獲利因子'], 2)}）", "創 120 對照")
-    ck.contains(text, f"（底背離 {fmt(p['底背離']['獲利因子'], 2)} vs {fmt(f['底背離']['獲利因子'], 2)}、"
+    ck.contains(text, f"（創 120 獲利因子 {fmt(p['創120日新高']['獲利因子(PF)'], 2)} vs "
+                      f"{fmt(f['創120日新高']['獲利因子(PF)'], 2)}）", "創 120 對照")
+    ck.contains(text, f"（底背離 {fmt(p['底背離']['獲利因子(PF)'], 2)} vs {fmt(f['底背離']['獲利因子(PF)'], 2)}、"
                       f"低檔＋紅K 總獲利 {fmt(p['低檔＋紅K']['總獲利(萬)'], 0)} 萬 vs "
                       f"{fmt(f['低檔＋紅K']['總獲利(萬)'], 0)} 萬）", "弱策略對照")
     rf, rp = pick(fix, "創120日新高", "隨機"), pick(pct, "創120日新高", "隨機")
@@ -79,7 +80,7 @@ def main() -> int:
     text = read_post("kd-cross-multi-ratio")
     ck.tables(text, tables_for(7))
     ck.contains(text, f"隨機列的資金倍數中位（p5／p95）：{random_note('比例')}。", "隨機倍數註")
-    units = pd.read_csv(os.path.join(MULTI, "units.csv"), encoding="utf-8-sig")  # 份數表（整數，無精確欄）
+    units = common.read_result_csv(os.path.join(MULTI, "units.csv"), encoding="utf-8-sig")  # 份數表（整數，無精確欄）
     ck.contains(text, f"估出的「最壞連敗」（{units['S'].min()}～{units['S'].max()} 次）", "S 範圍")
     ck.contains(text, f"（{units['比例份數'].min()}～{units['比例份數'].max()} 份）", "份數範圍")
     geo = [round(1 / (1 - 0.8 ** (1 / s))) for s in units["S"]]

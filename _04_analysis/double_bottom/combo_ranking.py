@@ -22,6 +22,7 @@ if _root not in sys.path:
 
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _02_strategy.double_bottom_strategy.combo_sweep import SUB  # noqa: E402
 from _02_strategy.double_bottom_strategy.single_double_bottom_strategy import RESULT_DIR  # noqa: E402
 
@@ -34,7 +35,7 @@ EXPECTED_CELLS = 3
 
 def load_summary() -> pd.DataFrame:
     """讀全部 924 組，加上 cell 欄與 not_applicable 旗標。"""
-    df = pd.read_csv(SUMMARY)
+    df = common.read_result_csv(SUMMARY)
     if len(df) != 924:
         raise RuntimeError(f"{SUMMARY} 應有 924 組，實得 {len(df)}；先跑完 combo_sweep")
     df["cell"] = df["門檻%"].astype(str) + "_" + df["可成交"].map({True: "liq", False: "raw"})

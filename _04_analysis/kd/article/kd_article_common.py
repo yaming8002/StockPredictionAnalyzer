@@ -38,11 +38,11 @@ MINUS = "−"
 
 # 規格 9 欄（順序即文章表格欄序）
 SPEC = ["交易次數", "勝率%", "平均持有天", "獲利平均%", "虧損平均%", "中位數%",
-        "期望值/筆", "獲利因子", "總獲利(萬)"]
+        "期望值", "獲利因子(PF)", "總獲利(萬)"]
 # 存檔 aggregate 欄名（sanity check 用）
 _AGG = {"交易次數": "交易次數", "勝率%": "勝率(%)", "平均持有天": "平均持有天數",
         "獲利平均%": "平均獲利報酬率(%)", "虧損平均%": "平均虧損報酬率(%)",
-        "中位數%": "中位數報酬率(%)", "期望值/筆": "期望報酬值(EV)", "獲利因子": "獲利因子(PF)"}
+        "中位數%": "中位數報酬率(%)", "期望值": "期望報酬值(EV)", "獲利因子(PF)": "獲利因子(PF)"}
 
 # 落在 .5 上、存檔資料還原不了方向的格子（驗證腳本列警告、最終報告列未決）
 UNRESOLVED = []
@@ -90,12 +90,12 @@ def single_metrics(variant: str) -> dict:
     n = len(t)
     out = {"交易次數": n, "勝率%": win.sum() / n * 100, "平均持有天": float(days.mean()),
            "獲利平均%": float(rate[win].mean()), "虧損平均%": float(rate[lose].mean()),
-           "中位數%": float(rate.median()), "期望值/筆": float(pnl.sum()) / n,
-           "獲利因子": float(pnl[win].sum()) / abs(float(pnl[lose].sum())),
+           "中位數%": float(rate.median()), "期望值": float(pnl.sum()) / n,
+           "獲利因子(PF)": float(pnl[win].sum()) / abs(float(pnl[lose].sum())),
            "總獲利(萬)": float(pnl.sum()) / 10_000}
-    agg = pd.read_csv(os.path.join(folder, "single_kd_aggregate.csv"), encoding="utf-8-sig").iloc[0]
+    agg = common.read_result_csv(os.path.join(folder, "single_kd_aggregate.csv"), encoding="utf-8-sig").iloc[0]
     for k, col in _AGG.items():
-        tol = 0.0051 if k != "獲利因子" else 0.00051
+        tol = 0.0051 if k != "獲利因子(PF)" else 0.00051
         if abs(float(agg[col]) - out[k]) > tol:
             raise SystemExit(f"{variant} 重算 {k}={out[k]} 與 aggregate {agg[col]} 不符，定義需檢查")
     if abs(float(agg["總獲利"]) / 10_000 - out["總獲利(萬)"]) > 0.001:
@@ -157,7 +157,7 @@ def multi_cell(row: pd.Series, col: str, nd: int, where: str):
     if col == "勝率%":
         exact = _resolve_winrate(int(row["交易次數"]), v)
     elif col == "總獲利(萬)":
-        exact = _resolve_total(int(row["交易次數"]), float(row["期望值/筆"]), v)
+        exact = _resolve_total(int(row["交易次數"]), float(row["期望值"]), v)
     if exact is None:
         UNRESOLVED.append(f"{where}｜{col} 存檔 {v} 落在 .5、無逐筆資料可定方向（暫依存檔值進位）")
         return v

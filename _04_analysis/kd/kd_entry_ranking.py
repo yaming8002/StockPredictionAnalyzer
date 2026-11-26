@@ -64,7 +64,7 @@ def _load(name: str):
     path = os.path.join(_SRC[0], name, "single_kd_aggregate.csv")
     if not os.path.isfile(path):
         return None
-    return pd.read_csv(path, encoding="utf-8-sig").iloc[0]
+    return common.read_result_csv(path, encoding="utf-8-sig").iloc[0]
 
 
 def _row(name: str, agg, group: str) -> dict:
@@ -76,7 +76,7 @@ def _row(name: str, agg, group: str) -> dict:
     return {"分組": group, "進場": NAME_ENTRY.get(entry, "黃金交叉（基準）") if entry else "黃金交叉（基準）",
             "代號": "+".join(entry) if isinstance(entry, tuple) else entry,
             "變體": name, "交易次數": int(agg["交易次數"]), "勝率%": agg["勝率(%)"],
-            "獲利因子": pf, "總獲利(萬)": round(float(agg["總獲利"]) / 10000, 1),
+            "獲利因子(PF)": pf, "總獲利(萬)": round(float(agg["總獲利"]) / 10000, 1),
             "舊PF(07-20)": old, "PF差(新−舊)": round(pf - old, 3) if old is not None else None,
             "×高檔死叉 PF": round(float(hd["獲利因子(PF)"]), 3) if hd is not None else None}
 
@@ -109,7 +109,7 @@ def main() -> int:
         raise SystemExit("沒有任何彙總可排")
 
     df = pd.DataFrame(rows)
-    df = df.sort_values(["分組", "獲利因子"], ascending=[True, False], kind="mergesort")
+    df = df.sort_values(["分組", "獲利因子(PF)"], ascending=[True, False], kind="mergesort")
     is_cand = (df["分組"] == "候選(07-20)") & (df["代號"] != "")
     df["新排名"] = None
     df.loc[is_cand, "新排名"] = range(1, int(is_cand.sum()) + 1)
@@ -130,7 +130,7 @@ def main() -> int:
           f"掉出：{[e for e in OLD_TOP6 if e not in new_top] or '無'}｜"
           f"順序相同：{new_top == list(OLD_TOP6)}")
     if len(ranked) > TOP_N:
-        cut = ranked.iloc[TOP_N - 1]["獲利因子"] - ranked.iloc[TOP_N]["獲利因子"]
+        cut = ranked.iloc[TOP_N - 1]["獲利因子(PF)"] - ranked.iloc[TOP_N]["獲利因子(PF)"]
         print(f"第 {TOP_N} 名與第 {TOP_N + 1} 名的 PF 差：{cut:.3f}"
               f"（{ranked.iloc[TOP_N - 1]['進場']} vs {ranked.iloc[TOP_N]['進場']}）")
     print(f"→ {path}")

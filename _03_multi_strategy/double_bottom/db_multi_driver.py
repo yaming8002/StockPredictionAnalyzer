@@ -190,7 +190,7 @@ def run_pick(data, pick, done, rows, a, tmp, t0) -> None:
             rows.append(r)
             pd.DataFrame(rows).to_csv(PATH, index=False, encoding="utf-8-sig")
             print(f"  {mname}({n_units}) {kind}：{r['交易次數']:,.0f} 筆｜擋單 {r['擋單']:,.0f}｜"
-                  f"PF {r['獲利因子' + EXACT]:.3f}｜總獲利 {r['總獲利(萬)' + EXACT]:,.0f} 萬｜"
+                  f"PF {r['獲利因子(PF)' + EXACT]:.3f}｜總獲利 {r['總獲利(萬)' + EXACT]:,.0f} 萬｜"
                   f"年化 {r['年化報酬(%)' + EXACT]:.2f}%｜MDD {r['最大回撤(%)' + EXACT]:.1f}%｜"
                   f"{time.time() - tc:.0f} 秒", flush=True)
 
@@ -205,7 +205,7 @@ def main() -> int:
     os.makedirs(OUT, exist_ok=True)
     rows, done = [], set()
     if os.path.exists(PATH) and not a.restart:
-        rows = pd.read_csv(PATH).to_dict("records")
+        rows = common.read_result_csv(PATH).to_dict("records")
         done = {(r["交易策略"], r["投法"], r["排序"]) for r in rows}
         print(f"接續上次：已完成 {len(done)} 格", flush=True)
     t0 = time.time()

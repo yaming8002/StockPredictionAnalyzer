@@ -45,7 +45,7 @@ def detail_claim(df: pd.DataFrame, rank: pd.DataFrame, n: int, open_rate) -> tup
     get = lambda p, k: df[(df["門檻%"] == p) & df["可成交"] & (df["進場"] == k[0]) & (df["出場"] == k[1])].iloc[0]
     v = {p: get(p, (e, x)) for p in PCTS}
     b = {p: get(p, BASE) for p in PCTS}
-    paint = ("勝率%", "獲利平均%", "中位數%", "期望值/筆", "獲利因子")
+    paint = ("勝率%", "獲利平均%", "中位數%", "期望值", "獲利因子(PF)")
     ok = (all(half_up(v[p][c], 3) > half_up(b[p][c], 3) for p in PCTS for c in paint)
           and all(v[p]["平均持有天"] > b[p]["平均持有天"] and v[p]["虧損平均%"] < b[p]["虧損平均%"] for p in PCTS))
     hold = [v[p]["平均持有天"] / b[p]["平均持有天"] for p in PCTS]
@@ -63,7 +63,7 @@ def claims(df: pd.DataFrame) -> dict:
     rank = rank_combos(summ)
     first = tuple(rank.iloc[0][["進場", "出場"]])
     # 比基本版高／低：用逐筆重算的 PF 取到小數三位比（與表格底色同一口徑）
-    pf_r = {(p, e, x): half_up(_one_cached(p, True, e, x)["獲利因子"], 3)
+    pf_r = {(p, e, x): half_up(_one_cached(p, True, e, x)["獲利因子(PF)"], 3)
             for e, x in zip(rank["進場"], rank["出場"]) for p in PCTS}
     keys = list(zip(rank["進場"], rank["出場"]))
     up = pd.Series({k: sum(pf_r[(p, *k)] > pf_r[(p, *BASE)] for p in PCTS) for k in keys})
@@ -76,7 +76,7 @@ def claims(df: pd.DataFrame) -> dict:
     three = lambda e, x, c: [get(p, e, x)[c] for p in PCTS]
     ratio = [a / b for a, b in zip(three(*first, "平均持有天"), three(*BASE, "平均持有天"))]
     open_rate = lambda e, x: summ[(summ["進場"] == e) & (summ["出場"] == x) & summ["可成交"]]["未平倉率%"]
-    mtop_focus = [get(FOCUS[0], e, "rep_mtop")["獲利因子"] for e in mtop.index]
+    mtop_focus = [get(FOCUS[0], e, "rep_mtop")["獲利因子(PF)"] for e in mtop.index]
     in_band = [v for v in mtop_focus if 1.30 <= float(half_up(v, 3)) <= 1.35]
     pair = lambda x: summ[(summ["進場"] == "neck") & (summ["出場"] == x) & summ["可成交"]]["獲利因子(PF)"].tolist()
     neck_same = pair("add_mtop") == pair("base")

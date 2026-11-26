@@ -26,19 +26,20 @@ if _root not in sys.path:
 
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _04_analysis.kd.article.kd_article_common import (MC_DIR, SPEC, fmt, half_up,  # noqa: E402
                                                        html_row, single_metrics)
 
 BASE = "amt__golden__death"                 # 基本的 KD 交叉（含 1,000 萬門檻）
-SIGNED = {"中位數%", "期望值/筆", "總獲利(萬)"}
-POSNEG = ["獲利平均%", "虧損平均%", "中位數%", "期望值/筆", "總獲利(萬)"]
-UPDOWN = ["勝率%", "獲利平均%", "中位數%", "期望值/筆", "獲利因子"]
+SIGNED = {"中位數%", "期望值", "總獲利(萬)"}
+POSNEG = ["獲利平均%", "虧損平均%", "中位數%", "期望值", "總獲利(萬)"]
+UPDOWN = ["勝率%", "獲利平均%", "中位數%", "期望值", "獲利因子(PF)"]
 _ND = {"交易次數": 0, "勝率%": 1, "平均持有天": 0, "獲利平均%": 1, "虧損平均%": 1,
-       "中位數%": 1, "期望值/筆": 0, "總獲利(萬)": 0}
+       "中位數%": 1, "期望值": 0, "總獲利(萬)": 0}
 
 
 def cell(m: dict, col: str, pf_nd: int) -> str:
-    nd = pf_nd if col == "獲利因子" else _ND[col]
+    nd = pf_nd if col == "獲利因子(PF)" else _ND[col]
     return fmt(m[col], nd, sign=col in SIGNED)
 
 
@@ -46,7 +47,7 @@ def posneg(m: dict, col: str) -> str:
     """（一）（二）：顯示值正＝pos、負＝neg。"""
     if col not in POSNEG:
         return ""
-    q = half_up(m[col], 0 if col in ("期望值/筆", "總獲利(萬)") else 1)
+    q = half_up(m[col], 0 if col in ("期望值", "總獲利(萬)") else 1)
     return "pos" if q > 0 else ("neg" if q < 0 else "")
 
 
@@ -54,7 +55,7 @@ def updown(m: dict, base: dict, col: str, cols=UPDOWN) -> str:
     """（三）（四）：對基本版比高低（兩位小數；獲利因子四位），相同不上色。"""
     if base is None or col not in cols:
         return ""
-    nd = 4 if col == "獲利因子" else 2
+    nd = 4 if col == "獲利因子(PF)" else 2
     a, b = half_up(m[col], nd), half_up(base[col], nd)
     return "up" if a > b else ("down" if a < b else "")
 
@@ -132,7 +133,7 @@ def var3(code) -> str:
 
 def rank3_order() -> list:
     """小結排行：依獲利因子由高到低（精確值排序）。"""
-    return sorted(RANK3, key=lambda x: -single_metrics(var3(x[1]))["獲利因子"])
+    return sorted(RANK3, key=lambda x: -single_metrics(var3(x[1]))["獲利因子(PF)"])
 
 
 def article3() -> list:
@@ -164,8 +165,8 @@ EXIT4 = [  # (小節表列名, 變體, 小結表列名)
 ]
 SUM4_EXTRA = [("高檔死叉<br>（K、D&gt;80 才賣）＊第二篇已見", "amt__golden__high_death"),
               ("K 跌破 50 或 80<br>（合併）", "amt__golden__k_down50-or-k_down80")]
-SUM4_COLS = ["交易次數", "平均持有天", "勝率%", "中位數%", "期望值/筆", "獲利因子", "總獲利(萬)"]
-SUM4_PAINT = ["勝率%", "中位數%", "期望值/筆", "獲利因子"]
+SUM4_COLS = ["交易次數", "平均持有天", "勝率%", "中位數%", "期望值", "獲利因子(PF)", "總獲利(萬)"]
+SUM4_PAINT = ["勝率%", "中位數%", "期望值", "獲利因子(PF)"]
 
 
 def article4() -> list:
@@ -175,7 +176,7 @@ def article4() -> list:
         out.append((f"（四）{lbl}", [spec_row(BASE_LABEL4, BASE, 3, "updown"),
                                      spec_row(lbl, var, 2, "updown", base)]))
     rows = [(s, v) for _, v, s in EXIT4] + SUM4_EXTRA
-    rows.sort(key=lambda x: -single_metrics(x[1])["獲利因子"])
+    rows.sort(key=lambda x: -single_metrics(x[1])["獲利因子(PF)"])
     summ = [spec_row(s, v, 2, "updown", base, SUM4_COLS, SUM4_PAINT) for s, v in rows]
     summ.append(spec_row("<b>基本的 KD 交叉<br>（一般死叉）</b>", BASE, 2, "updown", None, SUM4_COLS))
     out.append(("（四）小結排行", summ))
@@ -196,12 +197,12 @@ def v5(entry: str, exit_: str) -> str:
 
 def ent5_order() -> list:
     """矩陣與附錄的進場列序＝進場本身（×一般死叉）的獲利因子由高到低（同（三）排行）。"""
-    return sorted(ENT5, key=lambda e: -single_metrics(v5(e[2], "death"))["獲利因子"])
+    return sorted(ENT5, key=lambda e: -single_metrics(v5(e[2], "death"))["獲利因子(PF)"])
 
 
 def best5() -> tuple:
     """36 組裡獲利因子最高、總獲利最高的（進場, 出場）——★／◆ 標記用。"""
-    pf = {(e[2], x[1]): single_metrics(v5(e[2], x[1]))["獲利因子"] for e in ENT5 for x in EXIT5}
+    pf = {(e[2], x[1]): single_metrics(v5(e[2], x[1]))["獲利因子(PF)"] for e in ENT5 for x in EXIT5}
     tot = {k: single_metrics(v5(*k))["總獲利(萬)"] for k in pf}
     return max(pf, key=pf.get), max(tot, key=tot.get)
 
@@ -212,7 +213,7 @@ def matrix5(ents: list, best_pf: tuple) -> list:
     for name, _, code in ents:
         row = [("", name)]
         for _, x in EXIT5:
-            v = single_metrics(v5(code, x))["獲利因子"]
+            v = single_metrics(v5(code, x))["獲利因子(PF)"]
             row.append(("up" if v > 1 else "", fmt(v, 2) + (" ★" if (code, x) == best_pf else "")))
         rows.append(row)
     return rows
@@ -220,14 +221,14 @@ def matrix5(ents: list, best_pf: tuple) -> list:
 
 def high_death5(ents: list, best_pf: tuple, best_tot: tuple) -> list:
     """高檔死叉完整表：依獲利因子排；五欄對同一進場配一般死叉比。"""
-    hd = sorted(ents, key=lambda e: -single_metrics(v5(e[2], "high_death"))["獲利因子"])
+    hd = sorted(ents, key=lambda e: -single_metrics(v5(e[2], "high_death"))["獲利因子(PF)"])
     rows = []
     for name, _, code in hd:
         m, d = single_metrics(v5(code, "high_death")), single_metrics(v5(code, "death"))
         r = [("", name)]
         for c in SPEC:
             txt = cell(m, c, 2)
-            if c == "獲利因子" and (code, "high_death") == best_pf:
+            if c == "獲利因子(PF)" and (code, "high_death") == best_pf:
                 txt += " ★"
             if c == "總獲利(萬)" and (code, "high_death") == best_tot:
                 txt += " ◆"
@@ -238,7 +239,7 @@ def high_death5(ents: list, best_pf: tuple, best_tot: tuple) -> list:
 
 def mc5() -> list:
     """蒙地卡羅表：依每筆期望高到低；報酬類 > 0 上粉紅。"""
-    mc = pd.read_csv(os.path.join(MC_DIR, "kd_montecarlo.csv"), encoding="utf-8-sig")
+    mc = common.read_result_csv(os.path.join(MC_DIR, "kd_montecarlo.csv"), encoding="utf-8-sig")
     mc = mc[mc["分組"] == "文章"].sort_values("每筆期望%", ascending=False, kind="mergesort")
     label = {code: name for name, _, code in ENT5}
     return [[("", label[r["進場"]]), ("", fmt(r["交易數"], 0)), ("", r["抽樣模式"]),
@@ -259,7 +260,7 @@ def appendix5(ents: list, best_pf: tuple, best_tot: tuple) -> list:
             r = [("", f"{short} × {xname}{' ★' if x == 'high_death' else ''}")]
             for c in SPEC:
                 txt, cls = cell(m, c, 2), ""
-                if c == "獲利因子":
+                if c == "獲利因子(PF)":
                     cls = "up" if m[c] > 1 else ""
                     txt += " ◆" if (code, x) == best_pf else ""
                 if c == "總獲利(萬)" and (code, x) == best_tot:

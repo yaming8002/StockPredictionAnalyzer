@@ -137,7 +137,7 @@ def main():
                 rows.append(r)
                 print(f"  {mname}({n_units}) {kind}：{r['交易次數']:,} 筆"
                       f"｜擋單 {r['擋單']:,}｜勝率 {r['勝率%']}%｜"
-                      f"PF {r['獲利因子']}｜總獲利 {r['總獲利(萬)']} 萬｜"
+                      f"PF {r['獲利因子(PF)']}｜總獲利 {r['總獲利(萬)']} 萬｜"
                       f"{time.time() - tr:.1f} 秒", flush=True)
             # 隨機排序：重抽 N 次、每次換一整面板的亂數優先序，取中位當代表值
             # （單次抽樣受運氣影響太大，中位＋5/95 才看得出「亂買」的分布落在哪）。
@@ -160,7 +160,7 @@ def main():
                 med["總獲利(萬)P95" + EXACT] = float(rep["總獲利(萬)" + EXACT].quantile(0.95))
                 rows.append(med)
                 print(f"  {mname}({n_units}) 隨機×{a.random_runs}："
-                      f"PF {med['獲利因子']}｜總獲利中位 {med['總獲利(萬)']} 萬"
+                      f"PF {med['獲利因子(PF)']}｜總獲利中位 {med['總獲利(萬)']} 萬"
                       f"（P5 {med['總獲利(萬)P5']}／P95 {med['總獲利(萬)P95']}）｜"
                       f"{time.time() - tr:.0f} 秒", flush=True)
 

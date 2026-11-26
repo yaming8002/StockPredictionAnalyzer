@@ -19,6 +19,7 @@ if _root not in sys.path:
 
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _04_analysis.kd.article.build_kd_multi_tables import (load_multi, random_note,  # noqa: E402
                                                            tables_for)
 from _04_analysis.kd.article.kd_article_common import MULTI, Checker, fmt, read_post  # noqa: E402
@@ -34,14 +35,14 @@ def pick(df, name, order):
 def ordering_claims(ck: Checker, text: str, df: pd.DataFrame):
     names = df["交易策略"].unique()
     low_win = [n for n in names if pick(df, n, "低價")["總獲利(萬)"] > pick(df, n, "隨機")["總獲利(萬)"]
-               and pick(df, n, "低價")["獲利因子"] > pick(df, n, "隨機")["獲利因子"]]
+               and pick(df, n, "低價")["獲利因子(PF)"] > pick(df, n, "隨機")["獲利因子(PF)"]]
     ck.check(len(low_win) == 6, f"六種策略低價都贏過隨機：{low_win}")
     gap = {n: pick(df, n, "低價")["總獲利(萬)"] - pick(df, n, "隨機")["總獲利(萬)"] for n in names}
     ck.check(min(gap[n] for n in STRONG) > 100 and max(gap[n] for n in WEAK) < 20,
              f"前四種差距明顯、後兩種差距小：{ {k: round(v, 1) for k, v in gap.items()} }")
     c = pick(df, "創120日新高", "低價"), pick(df, "創120日新高", "隨機")
-    ck.contains(text, f"創 120 新高：低價總獲利 {fmt(c[0]['總獲利(萬)'], 0)} 萬、獲利因子 {fmt(c[0]['獲利因子'], 2)}，"
-                      f"高過隨機的 {fmt(c[1]['總獲利(萬)'], 0)} 萬／{fmt(c[1]['獲利因子'], 2)}", "創 120 例子")
+    ck.contains(text, f"創 120 新高：低價總獲利 {fmt(c[0]['總獲利(萬)'], 0)} 萬、獲利因子 {fmt(c[0]['獲利因子(PF)'], 2)}，"
+                      f"高過隨機的 {fmt(c[1]['總獲利(萬)'], 0)} 萬／{fmt(c[1]['獲利因子(PF)'], 2)}", "創 120 例子")
     for order in ("成交金額", "高價"):
         lose = sum(pick(df, n, order)["總獲利(萬)"] < pick(df, n, "隨機")["總獲利(萬)"] for n in names)
         ck.check(lose >= 4, f"{order}「多半輸給隨機」：{lose}/6")
@@ -65,7 +66,7 @@ def weak_claims(ck: Checker, text: str, df: pd.DataFrame):
     ck.check(dv["擋單"].max() < others["擋單"].min() and dv["擋單"].max() < lr["擋單"].min(), "底背離擋單最少")
     ck.contains(text, f"低檔＋紅K 四種排序都黏在損益兩平上下（{fmt(lr['總獲利(萬)'].min(), 0)}～"
                       f"{fmt(lr['總獲利(萬)'].max(), 0)} 萬）", "低檔＋紅K 範圍")
-    ck.check(lr["獲利因子"].between(0.95, 1.07).all(), f"低檔＋紅K PF 在 1 附近：{lr['獲利因子'].tolist()}")
+    ck.check(lr["獲利因子(PF)"].between(0.95, 1.07).all(), f"低檔＋紅K PF 在 1 附近：{lr['獲利因子(PF)'].tolist()}")
 
 
 def main() -> int:
@@ -73,7 +74,7 @@ def main() -> int:
     text = read_post("kd-cross-multi")
     ck.tables(text, tables_for(6))
     ck.contains(text, f"隨機列的資金倍數中位（p5／p95）：{random_note('定額')}。", "隨機倍數註")
-    units = pd.read_csv(os.path.join(MULTI, "units.csv"), encoding="utf-8-sig")  # 份數表（整數，無精確欄）
+    units = common.read_result_csv(os.path.join(MULTI, "units.csv"), encoding="utf-8-sig")  # 份數表（整數，無精確欄）
     ck.contains(text, f"估出的「最壞連敗」（{units['S'].min()}～{units['S'].max()} 次）", "S 範圍")
     ck.check((units["定額份數"] == (units["S"] / 0.2).round().astype(int)).all(), "定額份數＝S÷0.2")
     ck.contains(text, "（例如份數 75 → 13,333 元）", "每筆金額例")

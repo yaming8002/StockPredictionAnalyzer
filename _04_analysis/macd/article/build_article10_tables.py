@@ -35,16 +35,16 @@ SHOW_X = {"原生出場": "原本的出場", "跌破MA200": "跌破年線",
           "Supertrend翻空": "超級趨勢", "抱滿60天": "抱滿 60 天",
           "跌破20日低": "跌破二十日低", "頂頂低": "波段高點走低"}
 COLS = ["交易次數", "勝率%", "平均持有天", "獲利平均%", "虧損平均%", "中位數%",
-        "期望值/筆", "獲利因子", "總獲利(萬)", "未平倉%"]
+        "期望值", "獲利因子(PF)", "總獲利(萬)", "未平倉%"]
 
 
 def fmt(col, v):
     """負數用全形減號，千分位與小數位數比照（九）篇。"""
     if col == "交易次數":
         t = f"{int(round(v)):,}"
-    elif col == "期望值/筆":
+    elif col == "期望值":
         t = f"{v:,.0f}"
-    elif col == "獲利因子":
+    elif col == "獲利因子(PF)":
         t = f"{v:.4f}"
     elif col == "總獲利(萬)":
         t = f"{v:,.1f}"                       # 比照（七）（八）篇：總獲利一位小數
@@ -57,14 +57,14 @@ def fmt(col, v):
 
 
 def main():
-    d = pd.read_csv(CSV)
+    d = common.read_result_csv(CSV)
     # 基本版（無濾網 × 原生出場）先取出來當比較基礎，再把矩陣裁到選中的兩軸；
     # 沒裁的話排行表與統計會把落選的濾網／出場一起算進去。
     base = {}
     for pop in ("交叉", "零軸", "背離"):
         r = d[(d["母體"] == pop) & (d["進場濾網"] == "無濾網")
               & (d["出場"] == "原生出場")].iloc[0]
-        base[pop] = r["獲利因子"]
+        base[pop] = r["獲利因子(PF)"]
     d = d[d["進場濾網"].isin(FILTER_ORDER) & d["出場"].isin(EXIT_ORDER)]
 
     for pop in ("交叉", "零軸", "背離"):
@@ -80,7 +80,7 @@ def main():
                 cells = []
                 for c in COLS:
                     cls = ""
-                    if c == "獲利因子":
+                    if c == "獲利因子(PF)":
                         cls = ' class="up"' if r[c] > base[pop] else ' class="down"'
                     cells.append(f"<td{cls}>{fmt(c, r[c])}</td>")
                 print(f"<tr><td>{SHOW_F[f]}</td><td>{SHOW_X[x]}</td>"
@@ -88,9 +88,9 @@ def main():
         print()
 
     a = d[d["交易次數"] > 0].copy()
-    a["勝基準線"] = a.apply(lambda r: r["獲利因子"] > base[r["母體"]], axis=1)
+    a["勝基準線"] = a.apply(lambda r: r["獲利因子(PF)"] > base[r["母體"]], axis=1)
     g = (a.groupby(["進場濾網", "出場"])
-          .agg(母體數=("母體", "count"), 平均=("獲利因子", "mean"),
+          .agg(母體數=("母體", "count"), 平均=("獲利因子(PF)", "mean"),
                勝=("勝基準線", "sum"))
           .reset_index().sort_values("平均", ascending=False))
     for tag, n in (("RANK3", 3), ("RANK2", 2)):
@@ -98,7 +98,7 @@ def main():
         for _, r in g[g["母體數"] == n].iterrows():
             pf = {p: a[(a["進場濾網"] == r["進場濾網"]) & (a["出場"] == r["出場"])
                        & (a["母體"] == p)] for p in ("交叉", "零軸", "背離")}
-            cells = "".join(f"<td>{v.iloc[0]['獲利因子']:.4f}</td>" if len(v)
+            cells = "".join(f"<td>{v.iloc[0]['獲利因子(PF)']:.4f}</td>" if len(v)
                             else "<td>—</td>" for v in pf.values())
             print(f"<tr><td>{SHOW_F[r['進場濾網']]}</td><td>{SHOW_X[r['出場']]}</td>"
                   f"{cells}<td>{r['平均']:.4f}</td><td>{int(r['勝'])}/{n}</td></tr>")
@@ -115,24 +115,24 @@ def main():
     for pop in ("交叉", "零軸", "背離"):
         x = a[a["母體"] == pop]
         print(f"  {pop}：有交易 {len(x)} 格、勝基本版 {int(x['勝基準線'].sum())} 格、"
-              f"獲利因子 {x['獲利因子'].min():.4f}~{x['獲利因子'].max():.4f}")
+              f"獲利因子 {x['獲利因子(PF)'].min():.4f}~{x['獲利因子(PF)'].max():.4f}")
     print("各出場 勝/總、平均、平均持有天：")
     for x in EXIT_ORDER:
         s_ = a[a["出場"] == x]
         print(f"  {SHOW_X[x]}：{int(s_['勝基準線'].sum())}/{len(s_)}、"
-              f"{s_['獲利因子'].mean():.4f}、{s_['平均持有天'].mean():.1f} 天")
+              f"{s_['獲利因子(PF)'].mean():.4f}、{s_['平均持有天'].mean():.1f} 天")
     print("各進場 勝/總、平均：")
     for f in FILTER_ORDER:
         s_ = a[a["進場濾網"] == f]
         print(f"  {SHOW_F[f]}：{int(s_['勝基準線'].sum())}/{len(s_)}、"
-              f"{s_['獲利因子'].mean():.4f}")
+              f"{s_['獲利因子(PF)'].mean():.4f}")
     print(f"未平倉% 最大：{a['未平倉%'].max():.2f}"
           f"（{a.loc[a['未平倉%'].idxmax(), '母體']}×"
           f"{a.loc[a['未平倉%'].idxmax(), '進場濾網']}×"
           f"{a.loc[a['未平倉%'].idxmax(), '出場']}）")
     for pop in ("交叉", "零軸", "背離"):
-        x = a[a["母體"] == pop].nlargest(3, "獲利因子")
-        best = "、".join(f"{r['進場濾網']}×{SHOW_X[r['出場']]} {r['獲利因子']:.4f}"
+        x = a[a["母體"] == pop].nlargest(3, "獲利因子(PF)")
+        best = "、".join(f"{r['進場濾網']}×{SHOW_X[r['出場']]} {r['獲利因子(PF)']:.4f}"
                         f"（{int(r['交易次數']):,} 筆）" for _, r in x.iterrows())
         print(f"{pop} 最佳三組：{best}")
     return 0

@@ -52,12 +52,12 @@ def per_strategy(df: pd.DataFrame) -> pd.DataFrame:
         lo, hi, rnd = b.loc["低價"], b.loc["高價"], b.loc["隨機"]
         rows.append({"name": name, "擋單倍數": rnd["擋單"] / rnd["交易次數"],
                      "低對高": lo["總獲利(萬)"] / hi["總獲利(萬)"], "低對隨": lo["總獲利(萬)"] / rnd["總獲利(萬)"] - 1,
-                     "EV多": lo["期望值/筆"] / rnd["期望值/筆"] - 1, "筆數多": lo["交易次數"] / rnd["交易次數"] - 1,
+                     "EV多": lo["期望值"] / rnd["期望值"] - 1, "筆數多": lo["交易次數"] / rnd["交易次數"] - 1,
                      "P5": rnd["總獲利(萬)P5" + EXACT], "P95": rnd["總獲利(萬)P95" + EXACT],
                      "寬度": (rnd["總獲利(萬)P95" + EXACT] - rnd["總獲利(萬)P5" + EXACT]) / rnd["總獲利(萬)"],
                      "未平倉": lo["期末未平倉"], "期末差": lo["最終權益"] / 1e4 - 100 - lo["總獲利(萬)"],
-                     "低勝隨": all(b.loc["低價", c] > rnd[c] for c in ("獲利因子", "總獲利(萬)")),
-                     "高輸隨": all(b.loc[k, c] < rnd[c] for k in ("高價", "成交金額") for c in ("獲利因子", "總獲利(萬)"))})
+                     "低勝隨": all(b.loc["低價", c] > rnd[c] for c in ("獲利因子(PF)", "總獲利(萬)")),
+                     "高輸隨": all(b.loc[k, c] < rnd[c] for k in ("高價", "成交金額") for c in ("獲利因子(PF)", "總獲利(萬)"))})
     return pd.DataFrame(rows).set_index("name")
 
 
@@ -66,7 +66,7 @@ def claims(df: pd.DataFrame, single: pd.DataFrame) -> dict:
     lo = df[df["排序"] == "低價"].set_index("交易策略")
     base = df[df["交易策略"] == "基本版"].set_index("排序")
     amounts = [1_000_000 / n for n in df.drop_duplicates("交易策略")["份數"]]
-    pf_single = {k: _get(single, 9, True, *v)["獲利因子"] for k, v in KEYS.items()}
+    pf_single = {k: _get(single, 9, True, *v)["獲利因子(PF)"] for k, v in KEYS.items()}
     by_ratio = s.sort_values("擋單倍數")
     by_width = s.sort_values("寬度")
     ratio_lines = "\n".join(f"- {n}：{half_up(r, 2)} 倍" for n, r in by_ratio["擋單倍數"].items())
@@ -79,8 +79,8 @@ def claims(df: pd.DataFrame, single: pd.DataFrame) -> dict:
         "低價全贏": (s["低勝隨"].all() and s["高輸隨"].all(), "**低價優先五組都贏過隨機**，高價優先、成交金額優先五組都輸給隨機"),
         "總獲利最高": (lo["總獲利(萬)"].idxmax() == "基本版",
                     f"總獲利最高的是基本版（低價 {half_up(lo.loc['基本版', '總獲利(萬)'], 0)} 萬）"),
-        "PF最高": (lo["獲利因子"].idxmax() == NAMES["rise_base"] and max(pf_single, key=pf_single.get) == "rise_base",
-                 f"獲利因子最高的是第二底墊高 ≥ 2% × 基本出場（低價 {half_up(lo.loc[NAMES['rise_base'], '獲利因子'], 4)}）"),
+        "PF最高": (lo["獲利因子(PF)"].idxmax() == NAMES["rise_base"] and max(pf_single, key=pf_single.get) == "rise_base",
+                 f"獲利因子最高的是第二底墊高 ≥ 2% × 基本出場（低價 {half_up(lo.loc[NAMES['rise_base'], '獲利因子(PF)'], 4)}）"),
         "中位數負": ((df["中位數%"] < 0).all(),
                  "中位數報酬五組都是負的（" + f"{half_up(df['中位數%'].max(), 2)}%～{half_up(df['中位數%'].min(), 2)}%）"
                  .replace("-", "−")),
@@ -107,8 +107,8 @@ def claims(df: pd.DataFrame, single: pd.DataFrame) -> dict:
                          f"{_rng(s['EV多'] * 100, 1, '%')}），成交筆數只多 {_rng(s['筆數多'] * 100, 1, '%')}"),
         "整理年化": (True, f"**年化報酬 {_rng(df['年化報酬(%)'], 2, '%')}、最大回撤 {_rng(df['最大回撤(%)'], 1, '%')}**；"
                          f"已實現權益最低 {_rng(df['已實現權益最低(%)'], 1, '%')}"),
-        "摘要": (True, f"擋單只有成交筆數的 {_rng(s['擋單倍數'], 2)} 倍；低價優先五組都贏過隨機，高價與成交金額優先五組都輸給"
-                       f"隨機，低價對隨機的總獲利多 {_rng(s['低對隨'] * 100, 1, '%')}"),
+        # summary 2026-11 依 SEO 規範縮短，原摘要句已不在文章；改驗正文同一組擋單倍數的句子。
+        "擋單句": (True, f"把隨機列的擋單除以成交筆數，五組只有 {_rng(s['擋單倍數'], 2)} 倍"),
     }
 
 

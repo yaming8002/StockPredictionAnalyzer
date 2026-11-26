@@ -103,7 +103,7 @@ def main() -> int:
         inst = case["make"](initial_cash=1e12, sizing_mode="fixed", min_invest=10_000.0)
         res = inst.run(data, DEFAULT_START, DEFAULT_END)
         multi = _norm(res["trades"])
-        single = pd.read_csv(case["trades"], encoding="utf-8-sig", dtype={"stock_id": str})
+        single = common.read_result_csv(case["trades"], encoding="utf-8-sig", dtype={"stock_id": str})
         single = _norm(single[single["stock_id"].isin(set(data))])
         merged = multi.merge(single, how="outer", indicator=True)
         only_m = int((merged["_merge"] == "left_only").sum())

@@ -76,7 +76,7 @@ def open_rate_table(df: pd.DataFrame, exits) -> str:
 
 def open_positions(e: str) -> pd.DataFrame:
     p, liq = OPEN_CELL
-    return pd.read_csv(os.path.join(SRC, f"p{p}_{'liq1000' if liq else 'raw'}__{e}", "open_positions.csv"))
+    return common.read_result_csv(os.path.join(SRC, f"p{p}_{'liq1000' if liq else 'raw'}__{e}", "open_positions.csv"))
 
 
 def open_summary(df: pd.DataFrame, exits) -> pd.DataFrame:
@@ -109,7 +109,7 @@ def open_summary_table(df: pd.DataFrame, exits) -> str:
 def _closed_trades(e: str, p: int, liq: bool) -> pd.DataFrame:
     """該格的已平倉交易；排掉損益剛好 0 的，與主表「交易次數」同一批。"""
     tag = f"p{p}_{'liq1000' if liq else 'raw'}__{e}"
-    tr = pd.read_csv(os.path.join(SRC, tag, f"single_double_bottom_{tag}_trades.csv"),
+    tr = common.read_result_csv(os.path.join(SRC, tag, f"single_double_bottom_{tag}_trades.csv"),
                      parse_dates=["buy_date", "sell_date"])
     tr["real_pnl"] = pd.to_numeric(tr["real_pnl"], errors="coerce").fillna(0)
     return tr[tr["real_pnl"] != 0].reset_index(drop=True)
@@ -122,10 +122,24 @@ def _closes() -> dict:
             for sid, df in common.iter_market(columns=["close"])}
 
 
+class PreFixDataMissing(RuntimeError):
+    """交易紀錄裡的股票在現行股價資料找不到。
+
+    雙底系列的交易紀錄是用 2026-11 官方資料修正前的股價算的；修正後有些股票被排除
+    （例：1260.TWO），持有期間跌幅就無法用現行資料重算。依「已上線系列不追溯」不重跑，
+    驗證程式遇到時印出說明後結束，不讓 KeyError 看起來像程式壞掉（用戶 2026-11-26 選此做法）。
+    """
+
+
 def worst_close_pct(tr: pd.DataFrame) -> np.ndarray:
     """每筆交易持有期間最低收盤相對買進價的 %。
     持有期間＝買進日～賣出日前一天：賣出日是開盤成交，那天的收盤已經不在手上。"""
     px = _closes()
+    missing = sorted(set(tr["stock_id"]) - set(px))
+    if missing:
+        raise PreFixDataMissing(
+            f"這篇用的是資料修正前的股價，現行資料無法重算：交易紀錄有 {len(missing)} 檔不在現行股價資料"
+            f"（{'、'.join(missing[:10])}{' 等' if len(missing) > 10 else ''}）。")
     out = np.empty(len(tr))
     for k, r in enumerate(tr.itertuples(index=False)):
         days, close = px[r.stock_id]
@@ -175,8 +189,8 @@ def summary_table(df: pd.DataFrame, exits, warn=()) -> str:
         pfs, ups = [], 0
         for liq in LIQS:
             for p in PCTS:
-                v, b = _cell(df, e, p, liq, "獲利因子"), _cell(df, "base", p, liq, "獲利因子")
-                pfs.append(fmt("獲利因子", v))
+                v, b = _cell(df, e, p, liq, "獲利因子(PF)"), _cell(df, "base", p, liq, "獲利因子(PF)")
+                pfs.append(fmt("獲利因子(PF)", v))
                 ups += v > b
         sub = df[df["變體"] == e]["未平倉率%"]
         rng = f"{half_up(sub.min(), 1)}～{half_up(sub.max(), 1)}"

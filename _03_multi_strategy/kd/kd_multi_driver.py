@@ -95,7 +95,7 @@ def read_s_table(path: str) -> dict:
     """MC 表 → {進場代號: S}（只取 × 高檔死叉 的列）。"""
     if not os.path.isfile(path):
         raise SystemExit(f"找不到 {path}\n先跑：python _04_analysis/kd/kd_montecarlo.py")
-    mc = pd.read_csv(path, encoding="utf-8-sig")
+    mc = common.read_result_csv(path, encoding="utf-8-sig")
     mc = mc[mc["出場"] == "high_death"]
     return dict(zip(mc["進場"], mc["連敗 P95"].astype(int)))
 
@@ -141,8 +141,8 @@ def exact_stats(trades: pd.DataFrame) -> dict:
     vals = {"勝率%": win.sum() / n * 100, "平均持有天": float(days.mean()),
             "獲利平均%": float(rate[win].mean()) if win.any() else 0.0,
             "虧損平均%": float(rate[lose].mean()) if lose.any() else 0.0,
-            "中位數%": float(rate.median()), "期望值/筆": float(pnl.sum()) / n,
-            "獲利因子": float(pnl[win].sum()) / loss_sum if loss_sum > 0 else float("inf"),
+            "中位數%": float(rate.median()), "期望值": float(pnl.sum()) / n,
+            "獲利因子(PF)": float(pnl[win].sum()) / loss_sum if loss_sum > 0 else float("inf"),
             "總獲利(萬)": float(pnl.sum()) / 10_000}
     return {k + EXACT: v for k, v in vals.items()}
 
@@ -277,19 +277,19 @@ def main() -> int:
             for f in futs:
                 print(f.result(), flush=True)
 
-    det = pd.concat([pd.read_csv(os.path.join(a.out, f"fixed_{e}.csv")) for e in a.entries])
+    det = pd.concat([common.read_result_csv(os.path.join(a.out, f"fixed_{e}.csv")) for e in a.entries])
     common.assert_spec_columns(det)
     det.to_csv(os.path.join(a.out, "orderings.csv"), index=False, encoding="utf-8-sig")
     rnd_files = [os.path.join(a.out, f"random_{e}.csv") for e in a.entries]
     rnd = pd.DataFrame()
     if all(os.path.isfile(p) for p in rnd_files):
-        rnd = pd.concat([pd.read_csv(p) for p in rnd_files])
+        rnd = pd.concat([common.read_result_csv(p) for p in rnd_files])
         rnd.to_csv(os.path.join(a.out, "random_median_run.csv"), index=False, encoding="utf-8-sig")
-        pd.concat([pd.read_csv(os.path.join(a.out, f"random_colmed_{e}.csv")) for e in a.entries]).to_csv(
+        pd.concat([common.read_result_csv(os.path.join(a.out, f"random_colmed_{e}.csv")) for e in a.entries]).to_csv(
             os.path.join(a.out, "random_colmedian.csv"), index=False, encoding="utf-8-sig")
     table = article_table(det, rnd)
     table.to_csv(os.path.join(a.out, "kd_multi_result.csv"), index=False, encoding="utf-8-sig")
-    show = ["交易策略", "投法", "份數", "排序", "交易次數", "擋單", "勝率%", "獲利因子",
+    show = ["交易策略", "投法", "份數", "排序", "交易次數", "擋單", "勝率%", "獲利因子(PF)",
             "總獲利(萬)", "資金倍數", "最大回撤%", "已實現權益最低%"]
     print(table[show].to_string(index=False))
     print(f"→ {a.out}")

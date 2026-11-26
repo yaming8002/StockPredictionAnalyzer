@@ -33,6 +33,7 @@ if _root not in sys.path:
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _03_multi_strategy.kd.kd_conclusion_equity import (EQUITY_NAME, RUNS_NAME,  # noqa: E402
                                                         WIN_START, equity_key)
 from _03_multi_strategy.kd.kd_multi_driver import INIT_CASH, OUT  # noqa: E402
@@ -73,7 +74,7 @@ def stats_2015(equity: pd.DataFrame, runs: pd.DataFrame, years: float) -> pd.Dat
 
 def top_full(path: str) -> pd.DataFrame:
     """（六）（七）全期 36 組（不含隨機）依總獲利精確值取前 TOP_N，附全期名次。"""
-    full = pd.read_csv(path, encoding="utf-8-sig")
+    full = common.read_result_csv(path, encoding="utf-8-sig")
     full = full[full["排序"] != "隨機"]
     top = full.sort_values("總獲利(萬)" + EXACT, ascending=False, kind="mergesort").head(TOP_N).copy()
     top.insert(0, "全期名次", range(1, TOP_N + 1))
@@ -95,7 +96,7 @@ def main() -> int:
         if not os.path.isfile(path):
             raise SystemExit(f"找不到輸出：{path}\n先跑 kd_multi_driver.py 與 kd_conclusion_equity.py")
     equity = pd.read_parquet(eq_path)
-    runs = pd.read_csv(runs_path, encoding="utf-8-sig")
+    runs = common.read_result_csv(runs_path, encoding="utf-8-sig")
     if "排序" not in runs.columns:
         raise SystemExit(f"{runs_path} 沒有「排序」欄＝舊版只跑低價的輸出，請重跑回測段")
     cal = equity.index
@@ -125,7 +126,7 @@ def main() -> int:
     vs.to_csv(os.path.join(a.out, "kd_conclusion_vs_0050.csv"), index=False, encoding="utf-8-sig")
 
     show = [c for c in ["全期名次"] + KEYS + ["交易次數", "擋單", "勝率%", "平均持有天", "獲利平均%",
-                                              "虧損平均%", "中位數%", "期望值/筆", "獲利因子", "總獲利(萬)"]]
+                                              "虧損平均%", "中位數%", "期望值", "獲利因子(PF)", "總獲利(萬)"]]
     print("全期（2002–2025）總獲利前", TOP_N, "名：")
     print(top[show].to_string(index=False))
     print(f"\n{cal[0].date()} ~ {cal[-1].date()}（{years:.2f} 年）對 0050：")

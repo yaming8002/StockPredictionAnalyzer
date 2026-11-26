@@ -32,9 +32,9 @@ def verify_claims(ck: Checker, text: str, df) -> None:
     # 摘要與破產率段
     ck.check(z["e_ruin"] == zf["e_ruin"], "等分踩破的組，比例與定額不是同一批")
     ck.check(z["f_ruin"] == zf["f_ruin"], "公式踩破的組，比例與定額不是同一批")
-    ck.phrase(text, f"等分這邊的風險故事跟固定投入幾乎一樣（同樣 {n_ruin} 組踩破八成），公式這邊破產的仍是同樣 "
-                    f"{len(z['f_ruin'])} 組，但破產率被推高（5/50、10/20 換成複利後從 {pct0(zf, '5/50')}%、"
-                    f"{pct0(zf, '10/20')}% 升到 {pct0(z, '5/50')}%、{pct0(z, '10/20')}%）")
+    # summary 2026-11 依 SEO 規範縮短，原摘要句已不在文章；改驗正文同一組破產率（比例 vs 固定投入）的句子。
+    ck.phrase(text, f"1,000 次裡卻分別有 {pct0(z, '5/50')}%、{pct0(z, '10/50')}%、{pct0(z, '10/20')}% 曾跌破八成；"
+                    f"同樣這三組在固定投入時是 {pct0(zf, '5/50')}%、{pct0(zf, '10/50')}%、{pct0(zf, '10/20')}%")
     ck.check(z["f_ruin"] == ["5/10", "5/50", "10/20", "10/50"], f"公式破產的組：{z['f_ruin']}")
     up = sum(z["med"](z["F"][p]) > zf["med"](zf["F"][p]) for p in PAIRS)
     ck.phrase(text, f"公式的報酬在多數組合（21 組裡 {up} 組）被放大了")

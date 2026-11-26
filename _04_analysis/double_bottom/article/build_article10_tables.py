@@ -36,7 +36,7 @@ def compare_table() -> str:
         vals = [f"{half_up(f['總獲利(萬)'], 0):,}", f"{half_up(p['總獲利(萬)'], 0):,}",
                 f"{half_up(p['總獲利(萬)'] / f['總獲利(萬)'], 2)}",
                 f"{half_up(f['交易次數'], 0):,}", f"{half_up(p['交易次數'], 0):,}",
-                f"{half_up(f['獲利因子'], 4)}", f"{half_up(p['獲利因子'], 4)}",
+                f"{half_up(f['獲利因子(PF)'], 4)}", f"{half_up(p['獲利因子(PF)'], 4)}",
                 f"{half_up(f['最大回撤(%)'], 1)}", f"{half_up(p['最大回撤(%)'], 1)}"]
         out.append(f"<tr><td>{label(name)}</td>{''.join(f'<td>{v}</td>' for v in vals)}</tr>")
     out.append("</tbody></table></div>")

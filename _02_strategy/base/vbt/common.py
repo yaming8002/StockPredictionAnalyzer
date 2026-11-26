@@ -307,7 +307,7 @@ def _empty_summary() -> dict:
             "平均獲利報酬率(%)", "平均虧損報酬率(%)", "中位數報酬率(%)",
             "最大獲利", "最大虧損",
             "最大獲利報酬率(%)", "最大虧損報酬率(%)", "平均持有天數",
-            "期望報酬值(EV)", "獲利因子(PF)", "總獲利", "IQR獲利下限", "IQR獲利上限",
+            "期望報酬值(EV)", "獲利因子(PF)", "總獲利", "日化PF", "日均獲利(元)", "IQR獲利下限", "IQR獲利上限",
             "IQR虧損下限", "IQR虧損上限", "排除極值後平均獲利金額",
             "排除極值後平均虧損金額", "排除極值後平均獲利報酬率(%)",
             "排除極值後平均虧損報酬率(%)", "排除極值後平均持有天數",
@@ -317,6 +317,40 @@ def _empty_summary() -> dict:
     summary = {k: 0.0 for k in keys}
     summary["交易次數"] = 0
     return summary
+
+
+def time_cost_metrics(trades: pd.DataFrame) -> tuple:
+    """
+    含持有時間的兩個指標（島型反轉系列起加入通用回測表）：
+      日化PF      ＝ 每筆「淨損益 ÷ 持有天數」後，獲利筆加總 ÷ 虧損筆加總的絕對值
+      日均獲利(元)＝ 總淨損益 ÷ 持有天數加總
+    持有天數用日曆天（hold_days＝賣出日 − 買進日），和「平均持有天」同一個天數：
+    讀者拿期望值 ÷ 平均持有天就能驗算日均獲利；資金在週末、連假一樣被占用，
+    日曆天才是實際的時間成本。單股、多股、MC 的交易紀錄都有買賣日期，不必另記 K 棒數。
+    （2026-11-25 用戶裁定由 K 棒改日曆天。）
+    trades 須已排除淨損益 0 元、含 profit 與 hold_days 欄。
+    """
+    if trades.empty:
+        return float("nan"), float("nan")
+    daily_pf, profit_per_day = time_cost_exact(trades["profit"], trades["hold_days"])
+    daily_pf = round(daily_pf, 4) if daily_pf != float("inf") else daily_pf
+    return daily_pf, round(profit_per_day, 2)
+
+
+def time_cost_exact(pnl: pd.Series, hold_days: pd.Series) -> tuple:
+    """time_cost_metrics 的未四捨五入版（文章出表要從精確值一次進位，見 fast_multi.exact_stats）。
+
+    pnl：每筆淨損益（已排除 0 元）；hold_days：每筆持有日曆天。回傳 (日化PF, 日均獲利(元))。
+    """
+    days = pd.to_numeric(hold_days, errors="coerce")
+    if days.isna().any() or (days <= 0).any():
+        raise ValueError("hold_days 有缺值或 ≤ 0，買賣日期須相隔至少 1 天")
+    pnl = pnl.astype(float)
+    per_day = pnl / days
+    win_sum = float(per_day[per_day > 0].sum())
+    lose_sum = abs(float(per_day[per_day < 0].sum()))
+    daily_pf = win_sum / lose_sum if lose_sum > 0 else float("inf")
+    return daily_pf, float(pnl.sum()) / float(days.sum())
 
 
 def summarize_trades(records: pd.DataFrame) -> dict:
@@ -353,6 +387,8 @@ def summarize_trades(records: pd.DataFrame) -> dict:
     total_lose = abs(float(lose_df["profit"].sum())) if not lose_df.empty else 0.0
     profit_factor = round(total_win / total_lose, 4) if total_lose > 0 else float("inf")
 
+    daily_pf, profit_per_day = time_cost_metrics(df)
+
     # 去極值（MAD）後各項指標 + 95% 信賴區間
     trim = _trim_block(win_df, lose_df, win_rate)
     win_ci = confidence_interval(win_df["profit"]) if not win_df.empty else (np.nan, np.nan)
@@ -376,6 +412,8 @@ def summarize_trades(records: pd.DataFrame) -> dict:
         "期望報酬值(EV)": round(expect_value, 2),
         "獲利因子(PF)": profit_factor,
         "總獲利": round(float(df["profit"].sum()), 2),
+        "日化PF": daily_pf,
+        "日均獲利(元)": profit_per_day,
     }
     ci = {
         "獲利信賴區間下限(95%)": win_ci[0],
@@ -387,10 +425,33 @@ def summarize_trades(records: pd.DataFrame) -> dict:
 
 
 # ── 回測結果主表「規格列」helper（對齊 memory backtest-result-table-spec）─────────────
-# 規格＝單一主表固定 10 欄：策略鍵（標籤，由呼叫端傳）＋下列 9 個指標欄（順序固定）。
+# 規格＝單一主表固定 12 欄：策略鍵（標籤，由呼叫端傳）＋下列 11 個指標欄（順序固定）。
+# 日化PF／日均獲利(元) 從島型反轉系列起加入，持有天數用日曆天（見 time_cost_metrics）。
 # 所有 driver 一律用 spec_row 出列，杜絕「手挑欄位」造成漏欄（driver 曾因手打 row 漏掉持有天/獲利均/虧損均）。
+# 欄名與文章規格（blog content_checks.STANDARD_TAIL_COLS）一致（2026-11-26 由「期望值/筆」「獲利因子」改名）。
 SPEC_COLUMNS = ("交易次數", "勝率%", "平均持有天", "獲利平均%", "虧損平均%",
-                "中位數%", "期望值/筆", "獲利因子", "總獲利(萬)")
+                "中位數%", "期望值", "日均獲利(元)", "獲利因子(PF)", "日化PF", "總獲利(萬)")
+
+# 2026-11-26 前產出的結果 CSV 用舊欄名；這些檔不回頭改，讀入時由 read_result_csv 換成新名。
+# 「_精確」後綴（fast_multi.exact_stats 的未四捨五入欄）一併對應。
+LEGACY_SPEC_NAMES = {"期望值/筆": "期望值", "獲利因子": "獲利因子(PF)"}
+
+
+def canon_spec_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """把舊規格欄名（含 _精確 後綴）換成新名；新舊同時存在代表檔案口徑混雜，直接 raise。"""
+    rename = {}
+    for old, new in LEGACY_SPEC_NAMES.items():
+        for suffix in ("", "_精確"):
+            if old + suffix in df.columns:
+                if new + suffix in df.columns:
+                    raise ValueError(f"結果檔同時有舊欄「{old + suffix}」與新欄「{new + suffix}」")
+                rename[old + suffix] = new + suffix
+    return df.rename(columns=rename) if rename else df
+
+
+def read_result_csv(path, **kwargs) -> pd.DataFrame:
+    """pd.read_csv ＋ canon_spec_columns：舊結果 CSV 不改檔也能用新欄名讀。"""
+    return canon_spec_columns(pd.read_csv(path, **kwargs))
 
 # 規格欄名 → summarize_trades 回傳的 summary key（"總獲利(萬)" 為特例：總獲利 ÷ 10000）
 _SPEC_MAP = {
@@ -400,13 +461,15 @@ _SPEC_MAP = {
     "獲利平均%": "平均獲利報酬率(%)",
     "虧損平均%": "平均虧損報酬率(%)",
     "中位數%": "中位數報酬率(%)",
-    "期望值/筆": "期望報酬值(EV)",
-    "獲利因子": "獲利因子(PF)",
+    "期望值": "期望報酬值(EV)",
+    "獲利因子(PF)": "獲利因子(PF)",
+    "日化PF": "日化PF",
+    "日均獲利(元)": "日均獲利(元)",
 }
 
 
 def spec_row(summary: dict, **labels) -> dict:
-    """把 summarize_trades 的 summary 轉成「規格固定 9 指標欄」的有序 row（標籤欄在前）。
+    """把 summarize_trades 的 summary 轉成「規格固定 11 指標欄」的有序 row（標籤欄在前）。
 
     labels：策略鍵與任意額外標籤欄（如 進場/投法/份數/擋單），依傳入順序置於指標欄之前。
     缺任何必要 summary key → 直接 raise（源頭杜絕漏欄；別再手打 row）。
@@ -426,7 +489,7 @@ def spec_row(summary: dict, **labels) -> dict:
 
 
 def assert_spec_columns(rows) -> None:
-    """出表前檢查：每列都含規格 9 欄，缺就 raise。rows 可為 list[dict] 或 DataFrame。"""
+    """出表前檢查：每列都含規格 11 欄，缺就 raise。rows 可為 list[dict] 或 DataFrame。"""
     if hasattr(rows, "columns"):             # DataFrame
         cols = set(rows.columns)
     elif rows:
@@ -435,4 +498,4 @@ def assert_spec_columns(rows) -> None:
         cols = set()
     missing = [c for c in SPEC_COLUMNS if c not in cols]
     if missing:
-        raise ValueError(f"結果表缺規格欄：{missing}（規格 9 欄＝{list(SPEC_COLUMNS)}）")
+        raise ValueError(f"結果表缺規格欄：{missing}（規格 11 欄＝{list(SPEC_COLUMNS)}）")

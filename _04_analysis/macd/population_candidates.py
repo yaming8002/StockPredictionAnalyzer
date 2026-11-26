@@ -42,15 +42,15 @@ BASE_COMBO = {
 }
 # 主表固定欄位（見 memory backtest-result-table-spec，中位數為主尺）
 COLS = ["交易次數", "勝率%", "平均持有天", "獲利平均%", "虧損平均%",
-        "中位數%", "期望值/筆", "獲利因子", "總獲利(萬)"]
+        "中位數%", "期望值", "獲利因子(PF)", "總獲利(萬)"]
 
 
 def load():
     """讀四份 CSV，出場分成附加版與取代版兩套（口徑不同，絕不可混在一起比）。"""
-    matrix = pd.read_csv(f"{RESULT}/_matrix_3x3.csv")
-    entry = pd.read_csv(f"{RESULT}/_entry_sweep_v2.csv")
-    par = pd.read_csv(f"{RESULT}/_exit_parallel.csv")
-    swp = pd.read_csv(f"{RESULT}/_exit_sweep.csv")
+    matrix = common.read_result_csv(f"{RESULT}/_matrix_3x3.csv")
+    entry = common.read_result_csv(f"{RESULT}/_entry_sweep_v2.csv")
+    par = common.read_result_csv(f"{RESULT}/_exit_parallel.csv")
+    swp = common.read_result_csv(f"{RESULT}/_exit_sweep.csv")
     # 附加（主軸）：A 組五條的並行版 ＋ B 組風控五條的疊加版
     exit_add = pd.concat([par[par["組"] == "A並行"],
                           swp[swp["組"] == "B疊加"]], ignore_index=True)
@@ -74,7 +74,7 @@ def fmt(v, digits=2):
 
 def best(df, pop, key):
     """取某母體裡獲利因子最高的一列，回傳 (規則名, 該列)。"""
-    d = df[df["母體"] == pop].sort_values("獲利因子", ascending=False)
+    d = df[df["母體"] == pop].sort_values("獲利因子(PF)", ascending=False)
     return (d.iloc[0][key], d.iloc[0]) if len(d) else (None, None)
 
 
@@ -88,7 +88,7 @@ def main():
         r = matrix[matrix["組合"] == combo].iloc[0]
         base[pop] = r
         rows.append([pop] + [
-            fmt(r[c], 4 if c == "獲利因子" else (0 if c in ("交易次數", "平均持有天") else 2))
+            fmt(r[c], 4 if c == "獲利因子(PF)" else (0 if c in ("交易次數", "平均持有天") else 2))
             for c in COLS])
     print("## 表一：四個母體的 baseline（（四）篇矩陣，可成交門檻）\n")
     print(md_table(rows, ["母體"] + COLS))
@@ -101,15 +101,15 @@ def main():
         an, a = best(exit_add, pop, "出場")
         rn, r = best(exit_rep, pop, "出場")
         rows.append([
-            pop, f'{b["獲利因子"]:.4f}',
-            en, f'{e["獲利因子"]:.4f}', f'{(e["獲利因子"] / b["獲利因子"] - 1) * 100:+.1f}%',
-            an, f'{a["獲利因子"]:.4f}', f'{(a["獲利因子"] / b["獲利因子"] - 1) * 100:+.1f}%',
-            rn, f'{r["獲利因子"]:.4f}', f'{(r["獲利因子"] / b["獲利因子"] - 1) * 100:+.1f}%',
+            pop, f'{b["獲利因子(PF)"]:.4f}',
+            en, f'{e["獲利因子(PF)"]:.4f}', f'{(e["獲利因子(PF)"] / b["獲利因子(PF)"] - 1) * 100:+.1f}%',
+            an, f'{a["獲利因子(PF)"]:.4f}', f'{(a["獲利因子(PF)"] / b["獲利因子(PF)"] - 1) * 100:+.1f}%',
+            rn, f'{r["獲利因子(PF)"]:.4f}', f'{(r["獲利因子(PF)"] / b["獲利因子(PF)"] - 1) * 100:+.1f}%',
         ])
     print("\n## 表二：每個母體的優化天花板（各取獲利因子最高的一條）\n")
-    print(md_table(rows, ["母體", "baseline", "最佳進場濾網", "獲利因子", "相對",
-                          "最佳出場·附加", "獲利因子", "相對",
-                          "最佳出場·取代", "獲利因子", "相對"]))
+    print(md_table(rows, ["母體", "baseline", "最佳進場濾網", "獲利因子(PF)", "相對",
+                          "最佳出場·附加", "獲利因子(PF)", "相對",
+                          "最佳出場·取代", "獲利因子(PF)", "相對"]))
     print("\n⚠️ 附加與取代是兩種口徑，同一張表只為對照，**絕不可混在一起排名**。"
           "附加＝原出場留著先觸發者算（七／八篇主軸）；取代＝整條換掉（九篇附錄）。")
 
@@ -120,13 +120,13 @@ def main():
         e, a, r = (df[df["母體"] == pop] for df in (entry, exit_add, exit_rep))
         rows.append([
             pop, fmt(b["交易次數"], 0),
-            f'{e["獲利因子"].min():.3f}~{e["獲利因子"].max():.3f}',
-            f'{(e["獲利因子"] > b["獲利因子"]).sum()}/{len(e)}',
+            f'{e["獲利因子(PF)"].min():.3f}~{e["獲利因子(PF)"].max():.3f}',
+            f'{(e["獲利因子(PF)"] > b["獲利因子(PF)"]).sum()}/{len(e)}',
             f'{int(e["交易次數"].min()):,}~{int(e["交易次數"].max()):,}',
-            f'{a["獲利因子"].min():.3f}~{a["獲利因子"].max():.3f}',
-            f'{(a["獲利因子"] > b["獲利因子"]).sum()}/{len(a)}',
-            f'{r["獲利因子"].min():.3f}~{r["獲利因子"].max():.3f}',
-            f'{(r["獲利因子"] > b["獲利因子"]).sum()}/{len(r)}',
+            f'{a["獲利因子(PF)"].min():.3f}~{a["獲利因子(PF)"].max():.3f}',
+            f'{(a["獲利因子(PF)"] > b["獲利因子(PF)"]).sum()}/{len(a)}',
+            f'{r["獲利因子(PF)"].min():.3f}~{r["獲利因子(PF)"].max():.3f}',
+            f'{(r["獲利因子(PF)"] > b["獲利因子(PF)"]).sum()}/{len(r)}',
         ])
     print("\n## 表三：規則敏感度與廣度\n")
     print(md_table(rows, ["母體", "baseline 交易次數", "進場獲利因子值域", "進場勝出",
@@ -138,7 +138,7 @@ def main():
     rows = []
     for rule in sorted(exit_rep["出場"].unique()):
         d = exit_rep[exit_rep["出場"] == rule]
-        vals = {p: f'{d[d["母體"] == p]["獲利因子"].iloc[0]:.4f}' for p in BASE_COMBO
+        vals = {p: f'{d[d["母體"] == p]["獲利因子(PF)"].iloc[0]:.4f}' for p in BASE_COMBO
                 if len(d[d["母體"] == p])}
         rows.append([rule] + list(vals.values())
                     + ["是" if vals.get("交叉") == vals.get("交叉進×零軸出") else "否"])

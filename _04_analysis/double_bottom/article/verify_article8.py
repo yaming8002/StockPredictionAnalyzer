@@ -22,9 +22,11 @@ for p in (_root, _here):
 
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _04_analysis.double_bottom.combo_drawdown_filter import OUT as DRAWDOWN_FILTER  # noqa: E402
 from _04_analysis.double_bottom.double_bottom_montecarlo import OUT_DRAWDOWN, T_LOW  # noqa: E402
 from build_article2_tables import half_up  # noqa: E402
+from build_article6_tables import PreFixDataMissing  # noqa: E402
 from build_article7_tables import BASE, FOCUS, TOP_MC, drawdown_cell, stats  # noqa: E402
 from build_article8_tables import all_tables, cells, picked, seventh_top  # noqa: E402
 from verify_article4 import article_path  # noqa: E402
@@ -43,7 +45,7 @@ def claims(df: pd.DataFrame) -> dict:
     p6, _ = FOCUS
     top7 = seventh_top()
     dd7 = pd.DataFrame([drawdown_cell(p6, r["進場"], r["出場"]) for _, r in top7.iterrows()])
-    flt = pd.read_csv(DRAWDOWN_FILTER)
+    flt = common.read_result_csv(DRAWDOWN_FILTER)
     base20 = flt[(flt["進場"] == "base") & (flt["出場"] == "base")].set_index("門檻%")["曾跌20%"]
     # 逐格篩選與排名
     c = cells()
@@ -55,14 +57,14 @@ def claims(df: pd.DataFrame) -> dict:
     get = lambda p, e, x: df[(df["門檻%"] == p) & df["可成交"] & (df["進場"] == e) & (df["出場"] == x)].iloc[0]
     rows = [get(*k) for k in keys]
     base9 = get(9, *BASE)
-    mc = pd.read_csv(OUT_DRAWDOWN)
+    mc = common.read_result_csv(OUT_DRAWDOWN)
     med = mc["報酬% 中位_精確"]
     mc_keys = list(zip(mc["門檻%"], mc["進場"], mc["出場"]))
-    ev_order = sorted(keys, key=lambda k: -get(*k)["期望值/筆"])
+    ev_order = sorted(keys, key=lambda k: -get(*k)["期望值"])
     med_order = [k for _, k in sorted(zip(-med, mc_keys))]
     entries = pd.Series([e for _, e, _ in keys]).value_counts()
     exits = {x for _, _, x in keys}
-    pf_rng = _rng([r["獲利因子"] for r in rows], 3)
+    pf_rng = _rng([r["獲利因子(PF)"] for r in rows], 3)
     med_rng = f"+{half_up(med.min(), 0)}%～+{half_up(med.max(), 0)}%"
     dd20_7 = _rng(dd7["曾跌20%"], 1, "%")
     # 報酬中位數跟基本版比（算法同〈MACD（十）〉：中位數 ÷ 基本版中位數 − 1）
@@ -91,9 +93,9 @@ def claims(df: pd.DataFrame) -> dict:
         "基本第7": (base_rank == 7 and (9, *BASE) in keys, "9% 的基本版本身排第 7，也在選入的五組裡"),
         "全9": (all(k[0] == 9 for k in keys) and len(keys) == TOP_MC and c[c["門檻%"] == 3]["名次"].min() > first_non9,
                 "所以挑出來的五組都是 ZigZag 9%"),
-        "PF區間": (True, f"五組的獲利因子在 {pf_rng} 之間，基本版是 {half_up(base9['獲利因子'], 3)}"),
-        "EV區間": (True, f"每筆期望值 {_rng([r['期望值/筆'] for r in rows], 0)} 元，基本版是 "
-                       f"{half_up(base9['期望值/筆'], 0)} 元"),
+        "PF區間": (True, f"五組的獲利因子在 {pf_rng} 之間，基本版是 {half_up(base9['獲利因子(PF)'], 3)}"),
+        "EV區間": (True, f"每筆期望值 {_rng([r['期望值'] for r in rows], 0)} 元，基本版是 "
+                       f"{half_up(base9['期望值'], 0)} 元"),
         "進場三種": (entries.to_dict() == {"rise": 3, "height": 1, "base": 1},
                  "第二底墊高 ≥ 2% 三組、型態高度 ≥ 10% 一組，另外一組是基本版本身"),
         "出場三種": (exits == {"base", "add_breakeven", "add_mtop"},
@@ -113,12 +115,13 @@ def claims(df: pd.DataFrame) -> dict:
         "整理七": (True, f"以 6% 為例，持有期間曾跌 20% 以上的有 {dd20_7}"),
         "整理篩選": (True, f"加上持有期間跌 20% 的門檻後，444 種剩 {len(c)} 種"),
         "整理前N": (True, f"前 {first_non9 - 1} 名都是 ZigZag 9%"),
-        "整理PF": (True, f"獲利因子 {pf_rng}，基本版是 {half_up(base9['獲利因子'], 3)}；"
+        "整理PF": (True, f"獲利因子 {pf_rng}，基本版是 {half_up(base9['獲利因子(PF)'], 3)}；"
                        f"報酬中位數比基本版{gap}"),
         "整理MC": (True, f"回撤 P95 {_rng(mc['最大回撤% P95'], 1, '%')}、最大連敗 P95 "
                        f"{mc['最大連敗 P95'].min()}～{mc['最大連敗 P95'].max()} 筆"),
-        "摘要七": (True, f"在 ZigZag 6% 有 {dd20_7} 的交易在持有期間曾跌 20% 以上"),
-        "摘要篩選": (True, f"剩 {len(c)} 種；依獲利因子排序"),
+        # summary 2026-11 依 SEO 規範縮短，原「摘要七」「摘要篩選」兩句已不在文章；
+        # dd20_7 由「七前五曾跌20」「整理七」驗，篩選數改驗正文排序那句。
+        "排序句": (True, f"通過的 {len(c)} 種依獲利因子由高到低排序"),
         "摘要MC": (True, f"報酬中位數在 {med_rng} 之間"),
     }
 
@@ -150,4 +153,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except PreFixDataMissing as err:          # 資料修正前算的文章，現行資料重算不了：說明後結束
+        print(f"⚠ 無法驗證：{err}")
+        sys.exit(2)

@@ -27,6 +27,7 @@ for p in (_root, _here):
 
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _02_strategy.double_bottom_strategy.single_double_bottom_strategy import RESULT_DIR  # noqa: E402
 from _03_multi_strategy.base.fast_multi import EXACT, exact_stats  # noqa: E402
 from build_article2_tables import COLS, LIQS, PCTS, table  # noqa: E402
@@ -45,7 +46,7 @@ def stats(exits=EXITS, src: str = SRC) -> pd.DataFrame:
             for e in exits:
                 tag = f"p{p}_{'liq1000' if liq else 'raw'}__{e}"
                 folder = os.path.join(src, tag)
-                tr = pd.read_csv(os.path.join(folder, f"single_double_bottom_{tag}_trades.csv"))
+                tr = common.read_result_csv(os.path.join(folder, f"single_double_bottom_{tag}_trades.csv"))
                 ex = exact_stats(tr)
                 with open(os.path.join(folder, "diag.json"), encoding="utf-8") as f:
                     dg = json.load(f)

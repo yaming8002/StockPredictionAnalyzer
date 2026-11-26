@@ -215,7 +215,7 @@ def main():
     path = os.path.join(OUT, "macd_multi_random.csv")
     rows, done = [], set()
     if os.path.exists(path) and not a.restart:
-        prev = pd.read_csv(path)
+        prev = common.read_result_csv(path)
         rows = prev.to_dict("records")
         done = {(r["交易策略"], r["投法"]) for r in rows}
         print(f"接續上次：已完成 {len(done)} 格", flush=True)
@@ -254,7 +254,7 @@ def main():
                                           encoding="utf-8-sig")   # 跑完一格就落地
                 r = rows[-1]
                 print(f"  {mname}({n_units}) 隨機×{len(got)}："
-                      f"{r['交易次數']:,.0f} 筆｜PF {r['獲利因子']}｜"
+                      f"{r['交易次數']:,.0f} 筆｜PF {r['獲利因子(PF)']}｜"
                       f"總獲利中位 {r['總獲利(萬)']} 萬"
                       f"（P5 {r['總獲利(萬)P5']}／P95 {r['總獲利(萬)P95']}）｜"
                       f"{time.time() - t:.0f} 秒", flush=True)

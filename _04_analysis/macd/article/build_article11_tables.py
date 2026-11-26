@@ -36,9 +36,9 @@ RND = os.path.join(SPA, "macd_multi_random.csv")
 
 # 表格欄位（順序即輸出順序）；前兩欄是標籤欄
 COLS = ["交易次數", "擋單", "勝率%", "平均持有天", "獲利平均%", "虧損平均%",
-        "中位數%", "期望值/筆", "獲利因子", "總獲利(萬)"]
+        "中位數%", "期望值", "獲利因子(PF)", "總獲利(萬)"]
 # 只有這兩欄標色：一個看效率、一個看結果，其餘欄位標了會變成整片顏色、反而讀不出重點
-PAINT = ["獲利因子", "總獲利(萬)"]
+PAINT = ["獲利因子(PF)", "總獲利(萬)"]
 
 
 def half_up(v, nd: int) -> Decimal:
@@ -55,11 +55,11 @@ def fmt(col: str, v) -> str:
         return f"{half_up(v, 0):,}"
     if col == "平均持有天":
         return f"{half_up(v, 0)}"
-    if col == "期望值/筆":
+    if col == "期望值":
         return f"{half_up(v, 0):,}".replace("-", "−")
     if col == "中位數%":
         return f"{half_up(v, 2)}".replace("-", "−")      # 中位數比照系列其他表留兩位
-    if col == "獲利因子":
+    if col == "獲利因子(PF)":
         # 留四位：兩位時有幾格跟隨機列顯示相同（如 1.39 對 1.39）卻標成輸，讀者看不出差在哪
         return f"{half_up(v, 4)}"
     if col == "總獲利(萬)":
@@ -82,8 +82,8 @@ def with_exact(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def load(mode: str) -> pd.DataFrame:
-    det = pd.read_csv(DET)
-    rnd = pd.read_csv(RND)
+    det = common.read_result_csv(DET)
+    rnd = common.read_result_csv(RND)
     df = with_exact(pd.concat([det, rnd], ignore_index=True))
     return df[df["投法"] == mode].copy()
 
@@ -96,7 +96,7 @@ def rows_for(df: pd.DataFrame) -> str:
     for name in order:
         blk = df[df["交易策略"] == name].sort_values("總獲利(萬)", ascending=False)
         base = float(blk[blk["排序"] == "隨機"]["總獲利(萬)"].iloc[0])
-        base_pf = float(blk[blk["排序"] == "隨機"]["獲利因子"].iloc[0])
+        base_pf = float(blk[blk["排序"] == "隨機"]["獲利因子(PF)"].iloc[0])
         first = True
         for _, r in blk.iterrows():
             head = f"<b>{name}</b>" if first else ""
@@ -105,7 +105,7 @@ def rows_for(df: pd.DataFrame) -> str:
             for c in COLS:
                 cls = ""
                 if c in PAINT and r["排序"] != "隨機":
-                    ref = base_pf if c == "獲利因子" else base
+                    ref = base_pf if c == "獲利因子(PF)" else base
                     cls = ' class="up"' if r[c] > ref else ' class="down"'
                 cells.append(f"<td{cls}>{fmt(c, r[c])}</td>")
             out.append(f"<tr><td>{head}</td><td>{kind}</td>" + "".join(cells) + "</tr>")

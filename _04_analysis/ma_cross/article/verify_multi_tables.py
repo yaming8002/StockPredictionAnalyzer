@@ -84,7 +84,7 @@ def verify_orders(ck: Checker, table: str, df, mode: str) -> None:
         p = row[0][1]
         rr = {o: mrow(df, p, formula, o) for o in ORDERS}
         ck.check(same(row[1][1], rr["隨機"]["擋單"]), f"排序表 {p} 擋單：文 {row[1][1]}")
-        for j, getter in enumerate((tot_wan, lambda r: float(r["期望值/筆"]))):
+        for j, getter in enumerate((tot_wan, lambda r: float(r["期望值"]))):
             base = half_up(getter(rr["隨機"]), 0)
             for k, o in enumerate(ORDERS):
                 cls, cell = row[2 + 4 * j + k]

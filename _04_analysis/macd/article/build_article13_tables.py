@@ -27,6 +27,7 @@ if _root not in sys.path:
 
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from build_article11_tables import COLS, DET, SPA, fmt, half_up, with_exact  # noqa: E402
 from _04_analysis.macd.macd_multi_conclusion import TOP_N  # noqa: E402
 
@@ -52,14 +53,14 @@ def label(name: str) -> str:
 
 def ranked() -> pd.DataFrame:
     """30 組依全期總獲利（精確值）由高到低，附名次。"""
-    df = with_exact(pd.read_csv(DET, encoding="utf-8-sig"))
+    df = with_exact(common.read_result_csv(DET, encoding="utf-8-sig"))
     df = df.sort_values("總獲利(萬)", ascending=False).reset_index(drop=True)
     df.insert(0, "全期名次", range(1, len(df) + 1))
     return df
 
 
 def conclusion() -> pd.DataFrame:
-    return with_exact(pd.read_csv(CONC, encoding="utf-8-sig"))
+    return with_exact(common.read_result_csv(CONC, encoding="utf-8-sig"))
 
 
 def table1(rk: pd.DataFrame) -> str:

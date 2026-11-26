@@ -186,7 +186,7 @@ def all_metrics(variant: str) -> dict:
 
 # ── 蒙地卡羅 ────────────────────────────────────────────────────────────────
 def mc() -> pd.DataFrame:
-    return pd.read_csv(MC_CSV).set_index("短/長")
+    return common.read_result_csv(MC_CSV).set_index("短/長")
 
 
 @lru_cache(maxsize=None)
@@ -216,9 +216,9 @@ def with_exact(df: pd.DataFrame) -> pd.DataFrame:
 def multi(task: str = "angle_adx") -> pd.DataFrame:
     """固定排序列＋隨機代表列（最終權益中位數那一次）合成一張表；有精確欄就以精確值為準。"""
     d = os.path.join(MULTI_DIR, task)
-    det = pd.read_csv(os.path.join(d, "orderings.csv"))
+    det = common.read_result_csv(os.path.join(d, "orderings.csv"))
     rnd_path = os.path.join(d, "random_dist.csv")
-    rnd = pd.read_csv(rnd_path) if os.path.isfile(rnd_path) else pd.DataFrame()
+    rnd = common.read_result_csv(rnd_path) if os.path.isfile(rnd_path) else pd.DataFrame()
     return with_exact(pd.concat([det, rnd], ignore_index=True))
 
 
@@ -232,7 +232,7 @@ def mrow(df: pd.DataFrame, pair: str, sizing: str, order: str) -> pd.Series:
 def multi_key(r: pd.Series) -> dict:
     """多股 CSV 列 → 指標鍵（與單股同一組鍵，方便共用比對）。"""
     return {"n": r["交易次數"], "wr": r["勝率%"], "hold": r["平均持有天"], "aw": r["獲利平均%"],
-            "al": r["虧損平均%"], "med": r["中位數%"], "ev": r["期望值/筆"], "pf": r["獲利因子"],
+            "al": r["虧損平均%"], "med": r["中位數%"], "ev": r["期望值"], "pf": r["獲利因子(PF)"],
             "tot": r["總獲利(萬)"], "blk": r["擋單"]}
 
 

@@ -118,7 +118,7 @@ def order_rows(df, mode: str) -> str:
     for p in PAIRS:
         rows = {o: mrow(df, p, formula, o) for o in ORDERS}
         tds = [f"<td>{p}</td>", f"<td>{afmt(rows['隨機']['擋單'])}</td>"]
-        for getter in (tot_wan, lambda r: float(r["期望值/筆"])):
+        for getter in (tot_wan, lambda r: float(r["期望值"])):
             base = half_up(getter(rows["隨機"]), 0)
             for o in ORDERS:
                 v = half_up(getter(rows[o]), 0)
@@ -135,7 +135,7 @@ def appendix_rows(df, mode: str, order: str) -> str:
     for p in PAIRS:
         r = mrow(df, p, formula, order)
         cells = [p, afmt(r["交易次數"]), raw(r["勝率%"]), raw(r["平均持有天"]), raw(r["獲利平均%"]),
-                 raw(r["虧損平均%"]), raw(r["中位數%"]), afmt(r["期望值/筆"]), afmt(r["獲利因子"], 2),
+                 raw(r["虧損平均%"]), raw(r["中位數%"]), afmt(r["期望值"]), afmt(r["獲利因子(PF)"], 2),
                  afmt(tot_wan(r)), afmt(r["擋單"])]
         out.append("<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>")
     return "".join(out)

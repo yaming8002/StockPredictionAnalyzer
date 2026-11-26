@@ -23,15 +23,16 @@ for p in (_root, _here):
 
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _03_multi_strategy.double_bottom.db_multi_driver import INIT_CASH, PATH, PICKS  # noqa: E402
 from build_article2_tables import half_up  # noqa: E402
 
 EXACT = "_精確"
 COLS = ["交易次數", "擋單", "勝率%", "平均持有天", "獲利平均%", "虧損平均%",
-        "中位數%", "期望值/筆", "獲利因子", "總獲利(萬)"]
+        "中位數%", "期望值", "獲利因子(PF)", "總獲利(萬)"]
 HEAD = ["交易次數", "擋單", "勝率%", "平均<br>持有天", "獲利<br>平均%", "虧損<br>平均%",
         "中位數%", "期望值<br>/筆", "獲利因子", "總獲利<br>(萬)"]
-PAINT = ["獲利因子", "總獲利(萬)"]
+PAINT = ["獲利因子(PF)", "總獲利(萬)"]
 S_BY = {p[0]: p[4] for p in PICKS}
 PCT_BY = {p[0]: int(round(p[1] * 100)) for p in PICKS}
 
@@ -41,13 +42,13 @@ def minus(s: str) -> str:
 
 
 def fmt(col: str, v) -> str:
-    if col in ("交易次數", "擋單", "期望值/筆", "總獲利(萬)"):
+    if col in ("交易次數", "擋單", "期望值", "總獲利(萬)"):
         return minus(f"{half_up(v, 0):,}")
     if col == "平均持有天":
         return f"{half_up(v, 0)}"
     if col == "中位數%":
         return minus(f"{half_up(v, 2)}")
-    if col == "獲利因子":
+    if col == "獲利因子(PF)":
         return f"{half_up(v, 4)}"
     return minus(f"{half_up(v, 1)}")
 
@@ -58,7 +59,7 @@ def label(name: str) -> str:
 
 def load(mode: str) -> pd.DataFrame:
     """精確欄覆蓋同名存檔欄；只留指定投法。"""
-    df = pd.read_csv(PATH)
+    df = common.read_result_csv(PATH)
     for c in [c for c in df.columns if c.endswith(EXACT)]:
         base = c[:-len(EXACT)]
         df[base] = df[c].where(df[c].notna(), df[base] if base in df.columns else df[c])

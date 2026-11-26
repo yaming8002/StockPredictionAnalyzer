@@ -32,7 +32,7 @@ from _04_analysis.macd.article.build_article9_table import load_replace  # noqa:
 
 POSTS = os.path.join(common.require_blog_dir(), "site", "content", "posts")
 R = common.result_dir("macd_strategy", "single_macd")
-p = pd.read_csv(R + "/_exit_pure_risk.csv")
+p = common.read_result_csv(R + "/_exit_pure_risk.csv")
 rep = load_replace()          # SPA 替換版結果（母體已換短名、出場用 NAME_EXIT）
 
 LAB1 = {"固定停利 +20%": "停利+20%", "固定停損 2×ATR": "停損2ATR"}
@@ -133,14 +133,14 @@ for b, x, unc, pb, addv, repv, d0, d1 in rows2:
     for got, want, name, tol in ((float(unc), r["未平倉%"], "未平倉%", 0.011),
                                  (float(pb), base_pf, "基準線（四篇）", 0.0001),
                                  (float(addv), ADD[key][b], "附加（七/八篇）", 0.0001),
-                                 (float(repv), r["獲利因子"], "替換", 0.0001),
+                                 (float(repv), r["獲利因子(PF)"], "替換", 0.0001),
                                  (float(d0), base_days, "原持有天", 0.5),
                                  (float(d1), r["平均持有天"], "新持有天", 0.5)):
         checked += 1
         if abs(got - want) > tol:
             fail(f"表2 {b}×{key} {name}: 文 {got} vs 來源 {want}")
-    n_add += r["獲利因子"] > ADD[key][b]
-    n_base += r["獲利因子"] > base_pf
+    n_add += r["獲利因子(PF)"] > ADD[key][b]
+    n_base += r["獲利因子(PF)"] > base_pf
 
 print("  正文統計：")
 for name, actual, claimed in (("替換勝過附加", n_add, 23),

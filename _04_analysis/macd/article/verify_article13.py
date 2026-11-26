@@ -74,12 +74,12 @@ def inventory_claims(rk: pd.DataFrame) -> list:
     c.append(f"無濾網換成成交金額優先只剩 {wan(nf.loc['成交金額', '總獲利(萬)'])} 萬、換成高價只剩 {wan(nf.loc['高價', '總獲利(萬)'])} 萬")
 
     first = top.iloc[0]
-    higher = top[top["獲利因子"] > first["獲利因子"]]
+    higher = top[top["獲利因子(PF)"] > first["獲利因子(PF)"]]
     assert len(higher) == 2 and set(higher["投法"]) == {"比例"}
     nf_row = higher[higher["交易策略"].str.contains("無濾網")].iloc[0]
     adx_row = higher[higher["交易策略"].str.contains("ADX")].iloc[0]
-    c.append(f"第 1 名的獲利因子是 {half_up(first['獲利因子'], 4)}，排在它後面的無濾網（{half_up(nf_row['獲利因子'], 4)}）"
-             f"與 ADX>25（{half_up(adx_row['獲利因子'], 4)}）都比它高")
+    c.append(f"第 1 名的獲利因子是 {half_up(first['獲利因子(PF)'], 4)}，排在它後面的無濾網（{half_up(nf_row['獲利因子(PF)'], 4)}）"
+             f"與 ADX>25（{half_up(adx_row['獲利因子(PF)'], 4)}）都比它高")
     assert first["交易次數"] > nf_row["交易次數"] and first["擋單"] < nf_row["擋單"]
     c.append(f"（{first['交易次數']:,} 筆、擋單 {first['擋單']:,}，無濾網是 {nf_row['交易次數']:,} 筆、擋單 {nf_row['擋單']:,}）")
     return c
@@ -139,7 +139,7 @@ def summary_claims(rk: pd.DataFrame, all15: pd.DataFrame, conc: pd.DataFrame) ->
 def main():
     text = read_post()
     rk, conc = ranked(), conclusion()
-    all15 = with_exact(pd.read_csv(ALL_2015, encoding="utf-8-sig"))
+    all15 = with_exact(common.read_result_csv(ALL_2015, encoding="utf-8-sig"))
     errors = 0
     rows = table1(rk).splitlines() + table2(conc).splitlines()
     for row in rows:

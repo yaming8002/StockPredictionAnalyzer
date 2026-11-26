@@ -29,8 +29,8 @@ def verify_claims(ck: Checker, text: str, df) -> None:
     n_hi, n_ruin, n_r90 = len(z["e_hi"]), len(z["e_ruin"]), len(z["e_ruin90"])
     f_ok = 21 - len(z["f_ruin"])
     ck.check(z["f_ruin"] == ["5/10", "5/50", "10/20", "10/50"], f"公式破產的組：{z['f_ruin']}（文：5/10、5/50、10/20、10/50）")
-    ck.phrase(text, f"報酬多數更高（{n_hi}/21 組），但有 {n_ruin} 組中途曾跌破八成底線（其中 {n_r90} 組機率在九成以上）；"
-                    f"公式讓出報酬，換到 {f_ok}/21 組守住底線")
+    # summary 2026-11 依 SEO 規範縮短，原摘要句已不在文章；n_hi／n_ruin／n_r90 由重點整理那句驗，這裡驗 f_ok 的正文句。
+    ck.phrase(text, f"公式（用最壞連敗反推）報酬平實，卻在 {f_ok}/21 組**守住八成底線**")
     ck.phrase(text, f"在多數組合都贏公式（21 組裡 {n_hi} 組）")
     ck.phrase(text, f"5/120 就差到 {fmt(z['E']['5/120']['總獲利(萬)_中位'])} 萬對 {fmt(z['F']['5/120']['總獲利(萬)_中位'])} 萬")
     ck.phrase(text, f"等分 20 份有 {n_ruin} 組會在交易途中把本金打到剩不到**八成**——其中 {n_r90} 組的破產率高達九成以上")

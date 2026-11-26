@@ -10,8 +10,9 @@
 
 資料來源＝SPA 單股回測輸出（`_02_strategy/island_strategy/island_entry_sweep.py`）：
   result/single_island_entry/<tag>/single_island_<tag>_trades.csv、diag.json
-每組讀逐筆 trades 重算規格 9 欄精確值（fast_multi.exact_stats）、一次 half-up；生效率、未平倉率讀 diag.json。
-位數同雙底進場篇：勝率／獲利平均／虧損平均／中位數 1 位，持有天、期望值、總獲利取整，獲利因子 3 位。
+每組讀逐筆 trades 重算通用回測表 11 個指標欄精確值（fast_multi.exact_stats）、一次 half-up；生效率、未平倉率讀 diag.json。
+位數同雙底進場篇：勝率／獲利平均／虧損平均／中位數 1 位，持有天、期望值、總獲利取整，獲利因子 3 位；
+日均獲利(元) 1 位、日化PF 3 位（同獲利因子）。兩欄天數用日曆天（common.time_cost_exact）。
 底色＝跟同出場的基本版比，只上勝率、獲利平均、中位數、期望值、獲利因子五欄；顯示一樣就不上色。
 
 執行：PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python _04_analysis/island/article/build_entry_tables.py [2|3] [--fill]
@@ -31,6 +32,7 @@ if _root not in sys.path:
 
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _02_strategy.island_strategy.single_island_strategy import RESULT_DIR  # noqa: E402
 from _03_multi_strategy.base.fast_multi import EXACT, exact_stats  # noqa: E402
 
@@ -53,10 +55,12 @@ LABELS = {"base": "基本版", "drop15": "前段跌幅 ≥ 15%", "drop25": "前�
           "wk_ma20_up": "週 MA20 上揚", "wk_cross4": "週 MA5 4 週內上穿週 MA20",
           "above200": "收盤 > MA200", "below200": "收盤 < MA200", "align20": "MA20 > MA60 > MA120",
           "ma60_120": "MA60 > MA120", "rsi30": "島內 RSI < 30", "kd20": "島內 K 值 < 20"}
-COLS = ["交易次數", "勝率%", "平均持有天", "獲利平均%", "虧損平均%", "中位數%", "期望值/筆", "獲利因子", "總獲利(萬)"]
-PAINT = ("勝率%", "獲利平均%", "中位數%", "期望值/筆", "獲利因子")
+COLS = ["交易次數", "勝率%", "平均持有天", "獲利平均%", "虧損平均%", "中位數%", "期望值", "日均獲利(元)",
+        "獲利因子(PF)", "日化PF", "總獲利(萬)"]
+PAINT = ("勝率%", "獲利平均%", "中位數%", "期望值", "獲利因子(PF)")
 HEAD = ("<thead><tr><th>版本</th><th>交易次數</th><th>勝率%</th><th>平均持有天</th><th>獲利平均%</th>"
-        "<th>虧損平均%</th><th>中位數%</th><th>期望值(EV)/筆(元)</th><th>獲利因子(PF)</th><th>總獲利(萬)</th>"
+        "<th>虧損平均%</th><th>中位數%</th><th>期望值(EV)/筆(元)</th><th>日均獲利(元)</th><th>獲利因子(PF)</th>"
+        "<th>日化PF</th><th>總獲利(萬)</th>"
         "</tr></thead>")
 NOTE = ('<div class="bt-note">勝率%、獲利平均%、中位數%、期望值、獲利因子 五欄以底色標方向：'
         '<span style="background:#fde4ec">&nbsp;粉紅＝比基本版好&nbsp;</span>、'
@@ -68,9 +72,9 @@ def half_up(v, nd: int) -> Decimal:
 
 
 def nd_of(col: str) -> int:
-    if col in ("交易次數", "平均持有天", "期望值/筆", "總獲利(萬)"):
+    if col in ("交易次數", "平均持有天", "期望值", "總獲利(萬)"):
         return 0
-    return 3 if col == "獲利因子" else 1
+    return 3 if col in ("獲利因子(PF)", "日化PF") else 1
 
 
 def fmt(col: str, v) -> str:
@@ -90,7 +94,7 @@ def stats(entries=ALL_ENTRIES) -> pd.DataFrame:
         for e in entries:
             tag = tag_of(e, ex)
             folder = os.path.join(SRC, tag)
-            tr = pd.read_csv(os.path.join(folder, f"single_island_{tag}_trades.csv"))
+            tr = common.read_result_csv(os.path.join(folder, f"single_island_{tag}_trades.csv"))
             exs = exact_stats(tr)
             with open(os.path.join(folder, "diag.json"), encoding="utf-8") as f:
                 dg = json.load(f)
@@ -145,8 +149,8 @@ def summary_table(df: pd.DataFrame, entries) -> str:
     for e in entries:
         pfs, ups = [], 0
         for ex in EXITS:
-            v, b = pick(df, e, ex)["獲利因子"], pick(df, "base", ex)["獲利因子"]
-            pfs.append(fmt("獲利因子", v))
+            v, b = pick(df, e, ex)["獲利因子(PF)"], pick(df, "base", ex)["獲利因子(PF)"]
+            pfs.append(fmt("獲利因子(PF)", v))
             ups += half_up(v, 3) > half_up(b, 3)
         eff = df[df["變體"] == e]["生效率%"]
         tail = ("<td>—</td><td>—</td>" if e == "base"

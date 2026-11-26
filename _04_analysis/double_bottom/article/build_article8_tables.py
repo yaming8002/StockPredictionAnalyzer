@@ -32,6 +32,7 @@ for p in (_root, _here):
 
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _04_analysis.double_bottom.combo_drawdown_filter import OUT_CELLS  # noqa: E402
 from _04_analysis.double_bottom.combo_ranking import rank_combos  # noqa: E402
 from _04_analysis.double_bottom.double_bottom_montecarlo import OUT_DRAWDOWN  # noqa: E402
@@ -50,7 +51,7 @@ def seventh_top() -> pd.DataFrame:
 
 def cells() -> pd.DataFrame:
     """逐格篩選後的排名（只含通過者）。"""
-    return pd.read_csv(OUT_CELLS)
+    return common.read_result_csv(OUT_CELLS)
 
 
 def picked() -> pd.DataFrame:
@@ -90,7 +91,7 @@ def cell_ranking_table() -> str:
         key = (r["門檻%"], r["進場"], r["出場"])
         mark = "選入" if key in chosen else ("筆數不足" if not r["夠筆數"] else "—")
         name = combo_or_base(r["進場"], r["出場"], " × ")
-        vals = [f"{int(r['交易次數']):,}", fmt("獲利因子", r["獲利因子_精確"]), fmt("期望值/筆", r["期望值_精確"]),
+        vals = [f"{int(r['交易次數']):,}", fmt("獲利因子(PF)", r["獲利因子(PF)_精確"]), fmt("期望值", r["期望值_精確"]),
                 f"{half_up(r['曾跌20%'], 2)}", mark]
         out.append(f"<tr><td>{r['名次']}</td><td>{int(r['門檻%'])}%</td><td>{name}</td>"
                    f"{''.join(f'<td>{v}</td>' for v in vals)}</tr>")
@@ -123,7 +124,7 @@ def picked_drawdown_table() -> str:
 
 def mc_labels() -> list:
     """蒙地卡羅表的組合名稱；CSV 的列序必須與挑出的五組一致。"""
-    mc = pd.read_csv(OUT_DRAWDOWN)
+    mc = common.read_result_csv(OUT_DRAWDOWN)
     pk = picked()
     if list(zip(mc["門檻%"], mc["進場"], mc["出場"])) != list(zip(pk["門檻%"], pk["進場"], pk["出場"])):
         raise RuntimeError("蒙地卡羅結果與挑出的五組不一致，先重跑 double_bottom_montecarlo.py --drawdown")

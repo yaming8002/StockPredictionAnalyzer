@@ -24,13 +24,14 @@ if _root not in sys.path:
 
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _02_strategy.double_bottom_strategy.single_double_bottom_strategy import RESULT_DIR  # noqa: E402
 from _03_multi_strategy.base.fast_multi import EXACT, exact_stats  # noqa: E402
 
 SRC = os.path.join(RESULT_DIR, "single_double_bottom")
 STATS_FILE = os.path.join(SRC, "_article1_stats.csv")
 PCTS = range(2, 11)
-COLS = ["交易次數", "勝率%", "平均持有天", "獲利平均%", "虧損平均%", "中位數%", "期望值/筆", "獲利因子", "總獲利(萬)"]
+COLS = ["交易次數", "勝率%", "平均持有天", "獲利平均%", "虧損平均%", "中位數%", "期望值", "獲利因子(PF)", "總獲利(萬)"]
 
 
 def half_up(v, nd: int) -> Decimal:
@@ -42,9 +43,9 @@ def fmt(col: str, v) -> str:
     """文章顯示位數；負號用全形減號（同系列其他文章）。"""
     if col == "交易次數":
         s = f"{half_up(v, 0):,}"
-    elif col in ("平均持有天", "期望值/筆", "總獲利(萬)"):
+    elif col in ("平均持有天", "期望值", "總獲利(萬)"):
         s = f"{half_up(v, 0):,}"
-    elif col == "獲利因子":
+    elif col == "獲利因子(PF)":
         s = f"{half_up(v, 2)}"
     else:
         s = f"{half_up(v, 1)}"
@@ -58,7 +59,7 @@ def stats() -> pd.DataFrame:
         for p in PCTS:
             tag = f"p{p}_{'liq1000' if liq else 'raw'}"
             folder = os.path.join(SRC, tag)
-            tr = pd.read_csv(os.path.join(folder, f"single_double_bottom_{tag}_trades.csv"))
+            tr = common.read_result_csv(os.path.join(folder, f"single_double_bottom_{tag}_trades.csv"))
             ex = exact_stats(tr)
             n = int((pd.to_numeric(tr["real_pnl"], errors="coerce").fillna(0) != 0).sum())
             with open(os.path.join(folder, "diag.json"), encoding="utf-8") as f:

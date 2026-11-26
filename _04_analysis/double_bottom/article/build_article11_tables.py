@@ -23,6 +23,7 @@ for p in (_root, _here):
 
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _04_analysis.double_bottom.db_multi_conclusion import ALL_FILE, BENCH, CONC_FILE, TOP_N  # noqa: E402
 from build_article2_tables import half_up  # noqa: E402
 from build_article9_tables import COLS, EXACT, HEAD, fmt, label, load  # noqa: E402
@@ -41,7 +42,7 @@ def ranked() -> pd.DataFrame:
 
 
 def _exact(path: str) -> pd.DataFrame:
-    df = pd.read_csv(path, encoding="utf-8-sig")
+    df = common.read_result_csv(path, encoding="utf-8-sig")
     for c in T2_COLS:
         df[c] = df[c + EXACT]
     return df

@@ -37,47 +37,47 @@ def claims(df) -> dict:
     col = lambda e, c: df[df["變體"] == e][c]
     down = lambda e, c: all(a < b for a, b in six(df, e, c))
     up = lambda e, c: all(a > b for a, b in six(df, e, c))
-    pfd = lambda e: [a - b for a, b in six(df, e, "獲利因子")]
+    pfd = lambda e: [a - b for a, b in six(df, e, "獲利因子(PF)")]
     by_pct = lambda e, c: [[cell(df, e, p, liq, c) for p in PCTS] for liq in (True,)]
     rising = lambda rows: all(r[0] < r[1] < r[2] for r in rows)
     pfdrop_rows = lambda e: [[-x for x in pfd(e)]]
-    pf2 = lambda e: f"{arrow(df, e, 3, True, '獲利因子')}；{arrow(df, e, 9, True, '獲利因子')}"
+    pf2 = lambda e: f"{arrow(df, e, 3, True, '獲利因子(PF)')}；{arrow(df, e, 9, True, '獲利因子(PF)')}"
     drop_rng = lambda e: f"{half_up(-max(pfd(e)), 3)}～{half_up(-min(pfd(e)), 3)}"
-    below1 = lambda e: sum(v < 1 for v, _ in six(df, e, "獲利因子"))
+    below1 = lambda e: sum(v < 1 for v, _ in six(df, e, "獲利因子(PF)"))
     mean_drop = {e: -sum(pfd(e)) / len(pfd(e)) for e in ALL_EXITS[1:]}
     ranked = sorted(mean_drop, key=mean_drop.get)
     return {
         # 保本停損
         "be_eff": (max(col("breakeven", "生效率%")) < 7, pct_range(col("breakeven", "生效率%"))),
-        "be_pfd": (down("breakeven", "獲利因子") and up("breakeven", "虧損平均%") and down("breakeven", "勝率%"),
+        "be_pfd": (down("breakeven", "獲利因子(PF)") and up("breakeven", "虧損平均%") and down("breakeven", "勝率%"),
                    drop_rng("breakeven")),
         # ATR 移動停損
         "atr_eff": (rising(by_pct("atr", "生效率%")) and by_pct("atr", "生效率%")[0][2] > 90,
                     pct_range(col("atr", "生效率%"))),
         "atr_hold": (down("atr", "平均持有天"), arrow(df, "atr", 9, True, "平均持有天", " 天")),
-        "atr_pf": (down("atr", "獲利因子") and rising(pfdrop_rows("atr")), pf2("atr")),
+        "atr_pf": (down("atr", "獲利因子(PF)") and rising(pfdrop_rows("atr")), pf2("atr")),
         # 自高點回落 20%
         "tr_eff": (rising(by_pct("trail20", "生效率%")) and by_pct("trail20", "生效率%")[0][0] < 5
                    and all(38 < r[2] < 42 for r in by_pct("trail20", "生效率%")),
                    pct_range(col("trail20", "生效率%"))),
-        "tr_pf": (down("trail20", "獲利因子") and rising(pfdrop_rows("trail20")), pf2("trail20")),
+        "tr_pf": (down("trail20", "獲利因子(PF)") and rising(pfdrop_rows("trail20")), pf2("trail20")),
         # 跌破 MA10
         "ma10_eff": (min(col("ma10", "生效率%")) > 94, pct_range(col("ma10", "生效率%"))),
         "ma10_pre": (True, pct_range(col("ma10", "搶先率%"))),
         "ma10_hold": (True, f"{half_up(min(col('ma10', '平均持有天')), 0)}～{half_up(max(col('ma10', '平均持有天')), 0)} 天"),
         "ma10_pf": (below1("ma10") == 3,
-                    f"{fmt('獲利因子', min(col('ma10', '獲利因子')))}～{fmt('獲利因子', max(col('ma10', '獲利因子')))}"),
+                    f"{fmt('獲利因子(PF)', min(col('ma10', '獲利因子(PF)')))}～{fmt('獲利因子(PF)', max(col('ma10', '獲利因子(PF)')))}"),
         # 高檔 M 頭
         "mt_eff": (all(55 < x < 65 for x in col("mtop", "生效率%")), pct_range(col("mtop", "生效率%"))),
         "mt_pre": (all(18 < x < 23 for x in col("mtop", "搶先率%")), pct_range(col("mtop", "搶先率%"))),
-        "mt_pfd": (down("mtop", "獲利因子"), drop_rng("mtop")),
+        "mt_pfd": (down("mtop", "獲利因子(PF)"), drop_rng("mtop")),
         # 十條合併
-        "all_down": (all(down(e, "獲利因子") for e in ALL_EXITS[1:]), "兩篇十條、三十格的獲利因子都比基本版低"),
+        "all_down": (all(down(e, "獲利因子(PF)") for e in ALL_EXITS[1:]), "兩篇十條、三十格的獲利因子都比基本版低"),
         "least2": (ranked[:2] == ["breakeven", "mtop"], "降得最少的是**保本停損**和**高檔 M 頭**"),
         "below1": (below1("neck") == 3 and max(below1(e) for e in ALL_EXITS[1:] if e not in ("ma10", "neck")) < 3,
                    "**頸線停利**也三格都在 1 以下"),
-        "base_pf": (rising(by_pct("base", "獲利因子")) and rising(by_pct("base", "平均持有天")),
-                    "（" + "、".join(fmt("獲利因子", v) for v in by_pct("base", "獲利因子")[0]) + "）"),
+        "base_pf": (rising(by_pct("base", "獲利因子(PF)")) and rising(by_pct("base", "平均持有天")),
+                    "（" + "、".join(fmt("獲利因子(PF)", v) for v in by_pct("base", "獲利因子(PF)")[0]) + "）"),
         "all_hold": (all(down(e, "平均持有天") for e in ALL_EXITS[1:]), "三十格的平均持有天數全部比基本版短"),
     }
 

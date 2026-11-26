@@ -21,6 +21,7 @@ if _root not in sys.path:
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
+from _02_strategy.base.vbt import common  # noqa: E402
 from _02_strategy.base.vbt.common import DEFAULT_END, DEFAULT_START  # noqa: E402
 from _03_multi_strategy.double_bottom.db_multi_driver import PICKS, load_all  # noqa: E402
 from _03_multi_strategy.double_bottom.fast_multi_db import build_panel, run_panel  # noqa: E402
@@ -51,7 +52,7 @@ def main() -> int:
     for label, pct, entry, exit_key, _s in PICKS:
         panel = build_panel(data, entry, exit_key, pct, DEFAULT_START, DEFAULT_END)
         multi = _norm(run_panel(UNLIMITED, panel, np.zeros(panel["price"].shape), want_equity=False)["trades"])
-        single = pd.read_csv(trades_path(entry, exit_key, pct))
+        single = common.read_result_csv(trades_path(entry, exit_key, pct))
         single = _norm(single[single["stock_id"].astype(str).isin(set(data))])
         diff = multi.merge(single, how="outer", indicator=True)
         n_bad = int((diff["_merge"] != "both").sum())

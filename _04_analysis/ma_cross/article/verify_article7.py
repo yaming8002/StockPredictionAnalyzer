@@ -47,7 +47,8 @@ def verify_bench(ck: Checker, text: str, b: dict) -> None:
         ck.check(same(cells[3].replace("×", ""), mult), f"0050 {key} 倍數 {cells[3]} vs {mult:.4f}")
         ck.check(same(cells[4], cagr), f"0050 {key} 年化 {cells[4]} vs {cagr:.3f}")
     ck.phrase(text, f"配息額外貢獻約 {fmt(b['含息期末萬'] - b['價格期末萬'])} 萬")
-    ck.phrase(text, f"0050 含息把 100 萬滾到約 {fmt(b['含息期末萬'])} 萬")
+    # summary 2026-11 依 SEO 規範縮短，原「0050 含息把…」已不在文章；改驗正文同一數字的句子。
+    ck.phrase(text, f"100 萬滾到約 {fmt(b['含息期末萬'])} 萬")
     ck.check(abs(b["含息統計"][0] - 5.51) < 1e-9 and abs(b["含息統計"][1] - 16.81) < 1e-9, "0050 錨點對不上 ×5.51／16.81%")
 
 
@@ -71,7 +72,7 @@ def verify_claims(ck: Checker, text: str, b: dict, ends: dict) -> None:
     win = [p for p in PAIRS if ends[p] > bench]
     lose_principal = [p for p in PAIRS if ends[p] < 100]
     ck.check(not win, f"贏過 0050 的組：{win}")
-    ck.phrase(text, f"累積金額全部低於這個數，其中 {len(lose_principal)} 組倒賠")
+    ck.phrase(text, f"**{len(PAIRS)} 組全部低於 0050**")      # 倒賠組數由下面「甚至倒賠本金」那句驗
     top3 = sorted(PAIRS, key=lambda p: -ends[p])[:3]
     ck.phrase(text, "最接近的三組是 " + "、".join(f"{p}（{fmt(ends[p])} 萬）" for p in top3))
     ck.phrase(text, f"**{len(lose_principal)} 組（{'、'.join(lose_principal)}）甚至倒賠本金**")

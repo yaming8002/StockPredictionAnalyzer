@@ -93,7 +93,7 @@ def main() -> int:
                             | exact_stats(res["trades"]))      # 精確值供文章一次進位
                 r = runs[-1]
                 print(f"  {mname}({n_units}) {order}：{r['交易次數']:,} 筆｜擋單 {r['擋單']:,}｜"
-                      f"PF {r['獲利因子']}｜最終權益 {res['summary']['最終權益']:,.0f}", flush=True)
+                      f"PF {r['獲利因子(PF)']}｜最終權益 {res['summary']['最終權益']:,.0f}", flush=True)
 
     os.makedirs(a.out, exist_ok=True)
     eq_path, runs_path = os.path.join(a.out, EQUITY_NAME), os.path.join(a.out, RUNS_NAME)

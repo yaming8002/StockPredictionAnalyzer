@@ -32,10 +32,10 @@ SLUG = "double-bottom-entry-filters-2"
 
 def claims(df) -> list:
     """只用可成交 3 格（用戶 2026-11-11 拿掉裸版）。"""
-    pf = lambda e, p: fmt("獲利因子", cell(df, e, p, True, "獲利因子"))
+    pf = lambda e, p: fmt("獲利因子(PF)", cell(df, e, p, True, "獲利因子(PF)"))
     eff = lambda e: df[(df["變體"] == e) & df["可成交"]]["生效率%"]
-    ups = lambda e, c="獲利因子": [a > b for a, b in six(df, e, c)]
-    pfd = lambda e: [a - b for a, b in six(df, e, "獲利因子")]
+    ups = lambda e, c="獲利因子(PF)": [a > b for a, b in six(df, e, c)]
+    pfd = lambda e: [a - b for a, b in six(df, e, "獲利因子(PF)")]
     ratio = lambda e: [a / b for a, b in six(df, e, "交易次數")]
     rng = lambda xs, nd: f"{half_up(min(xs), nd)}～{half_up(max(xs), nd)}"
     pct = lambda xs: f"{half_up(min(xs) * 100, 0)}%～{half_up(max(xs) * 100, 0)}%"

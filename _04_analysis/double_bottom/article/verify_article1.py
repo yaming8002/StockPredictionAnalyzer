@@ -74,12 +74,12 @@ def claims(df: pd.DataFrame) -> list:
     rng = lambda s: f"{half_up(s.min(), 1)}%～{half_up(s.max(), 1)}%"   # 九組的範圍（一位小數）
     out = [
         ("裸版九組總獲利皆正", bool((raw["總獲利(萬)"] > 0).all()), "九種門檻全部是正的"),
-        ("裸版 PF 區間", True, f"獲利因子從 {f2(raw['獲利因子'].iloc[0])} 到 {f2(raw['獲利因子'].iloc[-1])}"),
+        ("裸版 PF 區間", True, f"獲利因子從 {f2(raw['獲利因子(PF)'].iloc[0])} 到 {f2(raw['獲利因子(PF)'].iloc[-1])}"),
         ("裸版總損益區間", True, f"總損益從 +{f0(raw['總獲利(萬)'].iloc[0])} 萬到 +{f0(raw['總獲利(萬)'].iloc[-1])} 萬"),
-        ("裸版 PF 單調上升", mono_up(raw["獲利因子"]),
-         f"{f2(raw['獲利因子'].iloc[0])} → {f2(raw['獲利因子'].iloc[1])} → {f2(raw['獲利因子'].iloc[2])} → … → {f2(raw['獲利因子'].iloc[-1])}"),
-        ("裸版 EV 單調上升", mono_up(raw["期望值/筆"]),
-         f"每筆期望值從 +{f0(raw['期望值/筆'].iloc[0])} 元一路到 +{f0(raw['期望值/筆'].iloc[-1])} 元"),
+        ("裸版 PF 單調上升", mono_up(raw["獲利因子(PF)"]),
+         f"{f2(raw['獲利因子(PF)'].iloc[0])} → {f2(raw['獲利因子(PF)'].iloc[1])} → {f2(raw['獲利因子(PF)'].iloc[2])} → … → {f2(raw['獲利因子(PF)'].iloc[-1])}"),
+        ("裸版 EV 單調上升", mono_up(raw["期望值"]),
+         f"每筆期望值從 +{f0(raw['期望值'].iloc[0])} 元一路到 +{f0(raw['期望值'].iloc[-1])} 元"),
         ("裸版總獲利也單調（九組沒有一組回頭）", mono_up(raw["總獲利(萬)"]), "九組沒有一組回頭"),
         ("裸版勝率範圍 31~33", bool(raw["勝率%"].between(31, 33).all()), "31%～33%"),
         ("裸版獲利平均端點且單調", mono_up(raw["獲利平均%"]),
@@ -99,22 +99,22 @@ def claims(df: pd.DataFrame) -> list:
          f"佔全部進場的 {f1(raw['未平倉率%'].min())}%～{f1(raw['未平倉率%'].max())}%（門檻越大越多）"),
     ]
     drop = 1 - liq["交易次數"] / raw["交易次數"]
-    pf_drop = raw["獲利因子"] - liq["獲利因子"]
+    pf_drop = raw["獲利因子(PF)"] - liq["獲利因子(PF)"]
     out += [
         ("可成交筆數少三到四成", bool(drop.between(0.3, 0.4).all()), "交易筆數少了三到四成"),
-        ("可成交九組皆正且 PF 單調", bool((liq["總獲利(萬)"] > 0).all()) and mono_up(liq["獲利因子"]),
-         f"獲利因子 {f2(liq['獲利因子'].iloc[0])} → {f2(liq['獲利因子'].iloc[-1])}"),
+        ("可成交九組皆正且 PF 單調", bool((liq["總獲利(萬)"] > 0).all()) and mono_up(liq["獲利因子(PF)"]),
+         f"獲利因子 {f2(liq['獲利因子(PF)'].iloc[0])} → {f2(liq['獲利因子(PF)'].iloc[-1])}"),
         ("PF 降幅區間", bool((pf_drop > 0).all()), f"獲利因子掉了 {f2(pf_drop.min())}～{f2(pf_drop.max())}"),
         ("總損益區間 裸版→可成交", True,
          f"總損益從 +{f0(raw['總獲利(萬)'].min())}～+{f0(raw['總獲利(萬)'].max())} 萬縮成 "
          f"+{f0(liq['總獲利(萬)'].min())}～+{f0(liq['總獲利(萬)'].max())} 萬"),
         ("可成交 2% 接近打平", True,
-         f"獲利因子 {f2(liq['獲利因子'].iloc[0])}、每筆期望值 +{f0(liq['期望值/筆'].iloc[0])} 元"),
+         f"獲利因子 {f2(liq['獲利因子(PF)'].iloc[0])}、每筆期望值 +{f0(liq['期望值'].iloc[0])} 元"),
         ("可成交勝率 30~31", bool(liq["勝率%"].between(30, 31).all()), "落在 30%～31%"),
         ("可成交出場比例範圍", True,
          f"跌破波段低點 {rng(liq['跌破低點占比%'])}、高點下移 {rng(liq['CHoCH占比%'])}、同一天 {rng(liq['同日占比%'])}"),
-        ("重點：裸版 PF 區間", True, f"獲利因子從 {f2(raw['獲利因子'].iloc[0])} 到 {f2(raw['獲利因子'].iloc[-1])}"),
-        ("重點：可成交 PF 區間", True, f"獲利因子落在 {f2(liq['獲利因子'].iloc[0])} 到 {f2(liq['獲利因子'].iloc[-1])}"),
+        ("重點：裸版 PF 區間", True, f"獲利因子從 {f2(raw['獲利因子(PF)'].iloc[0])} 到 {f2(raw['獲利因子(PF)'].iloc[-1])}"),
+        ("重點：可成交 PF 區間", True, f"獲利因子落在 {f2(liq['獲利因子(PF)'].iloc[0])} 到 {f2(liq['獲利因子(PF)'].iloc[-1])}"),
         ("重點：勝率三成出頭", bool(raw["勝率%"].between(30, 34).all()), "勝率一直停在三成出頭"),
     ]
     return out
